@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "emecom-generative"
+version = "0.1.0"
+description = ""
+authors = ["wedddy0707 <ryoryoueda@is.s.u-tokyo.ac.jp>"]
+readme = "README.md"
+packages = [{include = "emecom_generative"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+torch = "^1.13.1"
+pytorch-lightning = "^1.9.0"
+black = "^23.1.0"
+typed-argument-parser = "^1.7.2"
+logzero = "^1.7.0"
+editdistance = "^0.6.2"
+scipy = "^1.10.0"
+tensorboard = "^2.12.0"
+torch-tb-profiler = "^0.4.1"
+matplotlib = "^3.7.0"
+torchvision = "^0.14.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
