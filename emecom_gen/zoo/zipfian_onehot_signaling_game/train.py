@@ -33,6 +33,8 @@ class ArgumentParser(CommonArgumentParser):
                     f"len{self.max_len:0>4}",
                     f"pop{self.n_agent_pairs:0>4}",
                     f"prior{self.prior_type}",
+                    f"scell{self.sender_cell_type}",
+                    f"rcell{self.receiver_cell_type}",
                     f"seed{self.random_seed:0>4}",
                 ]
             )
