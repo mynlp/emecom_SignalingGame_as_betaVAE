@@ -1,4 +1,4 @@
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Literal
 from torch.nn import CrossEntropyLoss
 from torch import Tensor, randint
 import torch
@@ -23,12 +23,14 @@ class EnsembleBetaVAEGame(GameBase):
         message_prior: MessagePriorBase,
         lr: float = 0.0001,
         beta: float = 1,
+        baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean",
     ) -> None:
         super().__init__(lr=lr)
         assert len(senders) == len(receivers)
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta = beta
+        self.baseline_type: Literal["batch-mean", "critic-in-sender"] = baseline_type
 
         self.senders = list(senders)
         self.receivers = list(receivers)
@@ -87,12 +89,20 @@ class EnsembleBetaVAEGame(GameBase):
             * self.beta
             / len(self.senders)
         ) * mask
-        negative_returns = negative_returns - negative_returns.mean(dim=0, keepdim=True)
+
+        match self.baseline_type:
+            case "batch-mean":
+                baseline = negative_returns.mean(dim=0, keepdim=True)
+            case "critic-in-sender":
+                baseline = inversed_cumsum(output_s.estimated_value * mask, dim=-1)
+
+        negative_advantages = negative_returns.detach() - baseline
 
         surrogate_loss = (
             communication_loss
             - output_p.message_log_likelihood * self.beta / len(self.senders)
-            + (negative_returns * output_s.message_log_probs).sum(dim=-1)
+            + (negative_advantages.detach() * output_s.message_log_probs).sum(dim=-1)
+            + negative_advantages.pow(2).sum(dim=-1)
         )
 
         matching_count = (output_r.logits.argmax(dim=-1) == batch.target_label).long()
