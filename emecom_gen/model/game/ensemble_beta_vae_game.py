@@ -75,27 +75,24 @@ class EnsembleBetaVAEGame(GameBase):
 
         mask = output_s.message_mask
 
-        negative_advantages = (
+        negative_returns = (
             communication_loss.detach().unsqueeze(-1)
             + (
                 inversed_cumsum(
                     output_s.message_log_probs.detach() * mask,
                     dim=-1,
                 )
-                - output_p.message_log_likelihood.unsqueeze(-1)
+                - output_p.message_log_likelihood.detach().unsqueeze(-1)
             )
             * self.beta
             / len(self.senders)
-            - output_s.estimated_value
         ) * mask
-
-        value_estimation_loss = negative_advantages.pow(2).sum(dim=-1)
+        negative_returns = negative_returns - negative_returns.mean(dim=0, keepdim=True)
 
         surrogate_loss = (
             communication_loss
             - output_p.message_log_likelihood * self.beta / len(self.senders)
-            + (negative_advantages.detach() * output_s.message_log_probs).sum(dim=-1)
-            + value_estimation_loss
+            + (negative_returns * output_s.message_log_probs).sum(dim=-1)
         )
 
         matching_count = (output_r.logits.argmax(dim=-1) == batch.target_label).long()
@@ -106,7 +103,6 @@ class EnsembleBetaVAEGame(GameBase):
         return GameOutput(
             loss=surrogate_loss,
             communication_loss=communication_loss,
-            value_estimation_loss=value_estimation_loss,
             acc=acc,
             sender_output=output_s,
             receiver_output=output_r,
