@@ -2,6 +2,8 @@ from pytorch_lightning import LightningModule
 from typing import Any, Optional
 from torch.optim import Adam, Optimizer
 from torch import Tensor
+import torch
+import itertools
 
 from ...data.batch import Batch
 from ..sender import SenderBase
@@ -47,8 +49,12 @@ class GameBase(LightningModule):
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        for sender_idx in range(len(self.senders)):
-            for receiver_idx in range(len(self.receivers)):
+        streams: dict[tuple[int, int], torch.cuda.Stream] = {
+            k: torch.cuda.Stream() for k in itertools.product(range(len(self.senders)), range(len(self.receivers)))
+        }
+        torch.cuda.synchronize()
+        for (sender_idx, receiver_idx), stream in streams.items():
+            with torch.cuda.stream(stream):
                 game_output = self.forward(
                     batch,
                     sender_index=sender_idx,
@@ -61,6 +67,7 @@ class GameBase(LightningModule):
                     ),
                     batch_size=batch.batch_size,
                 )
+        torch.cuda.synchronize()
 
     def configure_optimizers(self) -> Optimizer:
         optimizer = Adam(self.parameters(), lr=self.lr)
