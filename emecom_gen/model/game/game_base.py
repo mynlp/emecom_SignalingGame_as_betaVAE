@@ -1,6 +1,6 @@
 from pytorch_lightning import LightningModule
-from typing import Any, Optional
-from torch.optim import Adam, Optimizer
+from typing import Any, Optional, Literal
+from torch.optim import Adam, Optimizer, SGD
 from torch import Tensor
 import torch
 import itertools
@@ -18,9 +18,16 @@ class GameBase(LightningModule):
     def __init__(
         self,
         lr: float,
+        optimizer_class: Literal["adam", "sgd"],
     ) -> None:
         super().__init__()
         self.lr = lr
+
+        match optimizer_class:
+            case "adam":
+                self.optimizer_class = Adam
+            case "sgd":
+                self.optimizer_class = SGD
 
     def __call__(self, batch: Batch) -> GameOutput:
         return self.forward(batch)
@@ -70,5 +77,5 @@ class GameBase(LightningModule):
         torch.cuda.synchronize()
 
     def configure_optimizers(self) -> Optimizer:
-        optimizer = Adam(self.parameters(), lr=self.lr)
+        optimizer = self.optimizer_class(self.parameters(), lr=self.lr)
         return optimizer

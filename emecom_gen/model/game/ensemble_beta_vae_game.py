@@ -24,8 +24,9 @@ class EnsembleBetaVAEGame(GameBase):
         lr: float = 0.0001,
         beta: float = 1,
         baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean",
+        optimizer_class: Literal["adam", "sgd"] = "sgd",
     ) -> None:
-        super().__init__(lr=lr)
+        super().__init__(lr=lr, optimizer_class=optimizer_class)
         assert len(senders) == len(receivers)
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
