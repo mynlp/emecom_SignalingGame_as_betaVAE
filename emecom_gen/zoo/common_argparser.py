@@ -24,7 +24,7 @@ class CommonArgumentParser(Tap):
     receiver_hidden_size: int = 64  # Hidden size.
     receiver_cell_type: Literal["rnn", "gru", "lstm"] = "gru"  # RNN cell type.
 
-    n_epochs: int = 10000  # Number of epochs.
+    n_epochs: int = 100000  # Number of epochs.
     batch_size: int = 1024  # Batch size of data loader.
     num_workers: int = 4  # Number of workers of data loader.
     lr: float = 1e-3  # Learning rate.
