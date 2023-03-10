@@ -2,6 +2,7 @@ from typing import Sequence, Optional, Literal
 from torch.nn import CrossEntropyLoss
 from torch import Tensor, randint
 import torch
+import itertools
 
 from ...data.batch import Batch
 from ..sender import SenderBase
@@ -22,6 +23,7 @@ class EnsembleBetaVAEGame(GameBase):
         receivers: Sequence[ReceiverBase],
         message_prior: MessagePriorBase,
         lr: float = 0.0001,
+        weight_decay: float = 0,
         beta: float = 1,
         baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = "batch-mean",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
@@ -32,6 +34,7 @@ class EnsembleBetaVAEGame(GameBase):
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta = beta
         self.baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = baseline_type
+        self.weight_decay = weight_decay
 
         self.senders = list(senders)
         self.receivers = list(receivers)
@@ -109,7 +112,15 @@ class EnsembleBetaVAEGame(GameBase):
             - output_p.message_log_likelihood * self.beta / len(self.senders)
             + (negative_advantages.detach() * output_s.message_log_probs).sum(dim=-1)
             + negative_advantages.pow(2).sum(dim=-1)
-        )
+        ).mean()
+
+        # We do not use `weight_decay` in pytorch optimizers,
+        # because they would also update the parameters of unchosen senders/receivers.
+        l2_regularizer = 0
+        for p in itertools.chain.from_iterable([sender.parameters(), receiver.parameters(), self.prior.parameters()]):
+            l2_regularizer = l2_regularizer + p.pow(2).sum()
+
+        surrogate_loss = surrogate_loss + self.weight_decay * l2_regularizer
 
         matching_count = (output_r.logits.argmax(dim=-1) == batch.target_label).long()
         while len(matching_count.shape) > 1:
