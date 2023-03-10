@@ -27,7 +27,7 @@ class CommonArgumentParser(Tap):
     n_epochs: int = 100000  # Number of epochs.
     batch_size: int = 1024  # Batch size of data loader.
     num_workers: int = 4  # Number of workers of data loader.
-    lr: float = 1e-3  # Learning rate.
+    lr: float = 1e-4  # Learning rate.
     beta: float = 1  # Beta coefficient of beta-VAE.
     baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = "batch-mean"
     optimizer_class: Literal["adam", "sgd"] = "sgd"
