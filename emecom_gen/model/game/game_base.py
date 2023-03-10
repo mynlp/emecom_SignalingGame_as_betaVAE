@@ -48,8 +48,11 @@ class GameBase(LightningModule):
     ) -> Tensor:
         losses: list[Tensor] = []
 
+        n_devices = torch.cuda.device_count()
+
         streams: dict[tuple[int, int], torch.cuda.Stream] = {
-            k: torch.cuda.Stream() for k in itertools.product(range(len(self.senders)), range(len(self.receivers)))
+            k: torch.cuda.Stream(i % n_devices if n_devices > 0 else None)
+            for i, k in enumerate(itertools.product(range(len(self.senders)), range(len(self.receivers))))
         }
         torch.cuda.synchronize()
         for (sender_idx, receiver_idx), stream in streams.items():
@@ -77,8 +80,11 @@ class GameBase(LightningModule):
         *args: Any,
         **kwargs: Any,
     ) -> None:
+        n_devices = torch.cuda.device_count()
+
         streams: dict[tuple[int, int], torch.cuda.Stream] = {
-            k: torch.cuda.Stream() for k in itertools.product(range(len(self.senders)), range(len(self.receivers)))
+            k: torch.cuda.Stream(i % n_devices if n_devices > 0 else None)
+            for i, k in enumerate(itertools.product(range(len(self.senders)), range(len(self.receivers))))
         }
         torch.cuda.synchronize()
         for (sender_idx, receiver_idx), stream in streams.items():
