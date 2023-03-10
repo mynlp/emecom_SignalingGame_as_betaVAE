@@ -27,6 +27,9 @@ class EnsembleBetaVAEGame(GameBase):
         beta: float = 1,
         baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = "batch-mean",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
+        sender_update_prob: float = 1,
+        receiver_update_prob: float = 1,
+        prior_update_prob: float = 1,
     ) -> None:
         super().__init__(lr=lr, optimizer_class=optimizer_class)
         assert len(senders) == len(receivers)
@@ -35,6 +38,9 @@ class EnsembleBetaVAEGame(GameBase):
         self.beta = beta
         self.baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = baseline_type
         self.weight_decay = weight_decay
+        self.sender_update_prob = sender_update_prob
+        self.receiver_update_prob = receiver_update_prob
+        self.prior_update_prob = prior_update_prob
 
         self.senders = list(senders)
         self.receivers = list(receivers)
@@ -107,11 +113,33 @@ class EnsembleBetaVAEGame(GameBase):
 
         negative_advantages = (negative_returns.detach() - baseline) / denominator
 
+        update_sender = torch.bernoulli(
+            torch.as_tensor(
+                self.sender_update_prob,
+                dtype=torch.float,
+                device=self.device,
+            )
+        )
+        update_receiver = torch.bernoulli(
+            torch.as_tensor(
+                self.receiver_update_prob,
+                dtype=torch.float,
+                device=self.device,
+            )
+        )
+        update_prior = torch.bernoulli(
+            torch.as_tensor(
+                self.prior_update_prob,
+                dtype=torch.float,
+                device=self.device,
+            )
+        )
+
         surrogate_loss = (
-            communication_loss
-            - output_p.message_log_likelihood * self.beta / len(self.senders)
-            + (negative_advantages.detach() * output_s.message_log_probs).sum(dim=-1)
-            + negative_advantages.pow(2).sum(dim=-1)
+            communication_loss * update_receiver
+            - output_p.message_log_likelihood * update_prior * self.beta / len(self.senders)
+            + (negative_advantages.detach() * output_s.message_log_probs).sum(dim=-1) * update_sender
+            + negative_advantages.pow(2).sum(dim=-1) * update_sender
         ).mean()
 
         # We do not use `weight_decay` in pytorch optimizers,

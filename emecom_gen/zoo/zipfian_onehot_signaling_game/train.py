@@ -119,6 +119,9 @@ def main():
         weight_decay=args.weight_decay,
         baseline_type=args.baseline_type,
         optimizer_class=args.optimizer_class,
+        sender_update_prob=args.sender_update_prob,
+        receiver_update_prob=args.receiver_update_prob,
+        prior_update_prob=args.prior_update_prob,
     )
 
     logger.info("Create a trainer")
