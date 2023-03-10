@@ -23,7 +23,7 @@ class EnsembleBetaVAEGame(GameBase):
         message_prior: MessagePriorBase,
         lr: float = 0.0001,
         beta: float = 1,
-        baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean",
+        baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = "batch-mean",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
     ) -> None:
         super().__init__(lr=lr, optimizer_class=optimizer_class)
@@ -31,7 +31,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta = beta
-        self.baseline_type: Literal["batch-mean", "critic-in-sender"] = baseline_type
+        self.baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = baseline_type
 
         self.senders = list(senders)
         self.receivers = list(receivers)
@@ -94,10 +94,15 @@ class EnsembleBetaVAEGame(GameBase):
         match self.baseline_type:
             case "batch-mean":
                 baseline = negative_returns.mean(dim=0, keepdim=True).detach()
+                denominator = 1
+            case "batch-mean-std":
+                baseline = negative_returns.mean(dim=0, keepdim=True).detach()
+                denominator = negative_returns.std(dim=0, unbiased=False, keepdim=True).clamp(min=1e-8).detach()
             case "critic-in-sender":
                 baseline = inversed_cumsum(output_s.estimated_value * mask, dim=-1)
+                denominator = 1
 
-        negative_advantages = negative_returns.detach() - baseline
+        negative_advantages = (negative_returns.detach() - baseline) / denominator
 
         surrogate_loss = (
             communication_loss
