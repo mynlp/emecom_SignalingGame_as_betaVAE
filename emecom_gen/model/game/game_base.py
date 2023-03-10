@@ -46,33 +46,16 @@ class GameBase(LightningModule):
         *args: Any,
         **kwargs: Any,
     ) -> Tensor:
-        losses: list[Tensor] = []
-
-        n_devices = torch.cuda.device_count()
-
-        streams: dict[tuple[int, int], torch.cuda.Stream] = {
-            k: torch.cuda.Stream(i % n_devices if n_devices > 0 else None)
-            for i, k in enumerate(itertools.product(range(len(self.senders)), range(len(self.receivers))))
-        }
-        torch.cuda.synchronize()
-        for (sender_idx, receiver_idx), stream in streams.items():
-            with torch.cuda.stream(stream):
-                game_output = self.forward(
-                    batch,
-                    sender_index=sender_idx,
-                    receiver_index=receiver_idx,
-                )
-                self.log_dict(
-                    game_output.make_log_dict(
-                        prefix="train_",
-                        suffix=f"/sender_idx_{sender_idx}/receiver_idx_{receiver_idx}",
-                    ),
-                    batch_size=batch.batch_size,
-                )
-                losses.append(game_output.loss)
-        torch.cuda.synchronize()
-
-        return torch.stack(losses).mean()
+        game_output = self.forward(
+            batch,
+        )
+        self.log_dict(
+            game_output.make_log_dict(
+                prefix="train_",
+            ),
+            batch_size=batch.batch_size,
+        )
+        return game_output.loss.mean()
 
     def validation_step(
         self,
@@ -80,11 +63,8 @@ class GameBase(LightningModule):
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        n_devices = torch.cuda.device_count()
-
         streams: dict[tuple[int, int], torch.cuda.Stream] = {
-            k: torch.cuda.Stream(i % n_devices if n_devices > 0 else None)
-            for i, k in enumerate(itertools.product(range(len(self.senders)), range(len(self.receivers))))
+            k: torch.cuda.Stream() for k in itertools.product(range(len(self.senders)), range(len(self.receivers)))
         }
         torch.cuda.synchronize()
         for (sender_idx, receiver_idx), stream in streams.items():
