@@ -151,7 +151,7 @@ def main():
         accelerator=args.accelerator,
         devices=args.devices,
         max_epochs=args.n_epochs,
-        check_val_every_n_epoch=1,
+        check_val_every_n_epoch=args.check_val_every_n_epoch,
     )
 
     logger.info("Start fitting.")
