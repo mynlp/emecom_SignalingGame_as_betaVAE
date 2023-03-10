@@ -115,6 +115,10 @@ def main():
         receivers=receivers,
         message_prior=prior,
         beta=args.beta,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+        baseline_type=args.baseline_type,
+        optimizer_class=args.optimizer_class,
     )
 
     logger.info("Create a trainer")
