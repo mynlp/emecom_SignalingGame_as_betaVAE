@@ -1,7 +1,6 @@
 from pytorch_lightning import LightningModule
 from typing import Any, Optional, Literal
-from torch.optim import Adam, Optimizer, SGD
-from torch import Tensor
+from torch.optim import Adam, SGD
 import torch
 import itertools
 
@@ -22,6 +21,7 @@ class GameBase(LightningModule):
     ) -> None:
         super().__init__()
         self.lr = lr
+        self.automatic_optimization = False
 
         match optimizer_class:
             case "adam":
@@ -45,17 +45,34 @@ class GameBase(LightningModule):
         batch: Batch,
         *args: Any,
         **kwargs: Any,
-    ) -> Tensor:
+    ) -> None:
+        sender_index = int(torch.randint(low=0, high=len(self.senders), size=()).item())
+        receiver_index = int(torch.randint(low=0, high=len(self.receivers), size=()).item())
+
         game_output = self.forward(
             batch,
+            sender_index=sender_index,
+            receiver_index=receiver_index,
         )
+
+        optimizers = self.optimizers()
+        sender_optimizer: Adam | SGD = optimizers[sender_index]
+        receiver_optimizer: Adam | SGD = optimizers[len(self.senders) + receiver_index]
+
+        sender_optimizer.zero_grad()
+        receiver_optimizer.zero_grad()
+
+        self.manual_backward(game_output.loss.mean())
+
+        sender_optimizer.step()
+        receiver_optimizer.step()
+
         self.log_dict(
             game_output.make_log_dict(
                 prefix="train_",
             ),
             batch_size=batch.batch_size,
         )
-        return game_output.loss.mean()
 
     def validation_step(
         self,
@@ -83,6 +100,6 @@ class GameBase(LightningModule):
                 )
         torch.cuda.synchronize()
 
-    def configure_optimizers(self) -> Optimizer:
-        optimizer = self.optimizer_class(self.parameters(), lr=self.lr)
-        return optimizer
+    def configure_optimizers(self) -> list[Adam | SGD]:
+        optimizers = [self.optimizer_class(x.parameters(), lr=self.lr) for x in self.senders + self.receivers]
+        return optimizers
