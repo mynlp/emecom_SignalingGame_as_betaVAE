@@ -43,8 +43,7 @@ class GameBase(LightningModule):
     def training_step(
         self,
         batch: Batch,
-        *args: Any,
-        **kwargs: Any,
+        batch_idx: int,
     ) -> None:
         sender_index = int(torch.randint(low=0, high=len(self.senders), size=()).item())
         receiver_index = int(torch.randint(low=0, high=len(self.receivers), size=()).item())
