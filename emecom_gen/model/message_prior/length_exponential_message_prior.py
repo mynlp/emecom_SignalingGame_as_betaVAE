@@ -1,7 +1,7 @@
 from torch import Tensor
 import torch
 
-from .message_prior_output import MessagePriorOutput
+from .message_prior_output import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 from .message_prior_base import MessagePriorBase
 
 
@@ -31,4 +31,16 @@ class LengthExponentialMessagePrior(MessagePriorBase):
                 dtype=torch.float,
                 device=message_length.device,
             ).log()
+        )
+
+    def forward_gumbel_softmax(
+        self,
+        message: Tensor,
+    ):
+        return MessagePriorOutputGumbelSoftmax(
+            message_log_likelihood=torch.arange(message.shape[1], dtype=torch.float, device=message.device)
+            .reshape(1, message.shape[1])
+            .expand(message.shape[0], message.shape[1])
+            .neg()
+            * torch.as_tensor(self.base, dtype=torch.float, device=message.device).log()
         )

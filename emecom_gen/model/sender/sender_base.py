@@ -1,7 +1,7 @@
 from torch import Tensor
 from torch.nn import Module
 
-from .sender_output import SenderOutput
+from .sender_output import SenderOutput, SenderOutputGumbelSoftmax
 
 
 class SenderBase(Module):
@@ -15,4 +15,7 @@ class SenderBase(Module):
         return self.forward(input)
 
     def forward(self, input: Tensor) -> SenderOutput:
+        raise NotImplementedError()
+
+    def forward_gumbel_softmax(self, input: Tensor) -> SenderOutputGumbelSoftmax:
         raise NotImplementedError()

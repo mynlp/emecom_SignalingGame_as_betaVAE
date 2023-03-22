@@ -1,7 +1,7 @@
 from torch.nn import Module
 from torch import Tensor
 
-from .message_prior_output import MessagePriorOutput
+from .message_prior_output import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 
 
 class MessagePriorBase(Module):
@@ -22,4 +22,10 @@ class MessagePriorBase(Module):
         message: Tensor,
         message_length: Tensor,
     ) -> MessagePriorOutput:
+        raise NotImplementedError()
+
+    def forward_gumbel_softmax(
+        self,
+        message: Tensor,
+    ) -> MessagePriorOutputGumbelSoftmax:
         raise NotImplementedError()

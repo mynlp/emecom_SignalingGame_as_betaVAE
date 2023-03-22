@@ -2,13 +2,12 @@ from typing import Sequence, Optional, Literal
 from torch.nn import CrossEntropyLoss
 from torch import Tensor, randint
 import torch
-import itertools
 
 from ...data.batch import Batch
 from ..sender import SenderBase
 from ..receiver import ReceiverBase
 from ..message_prior import MessagePriorBase
-from .game_output import GameOutput
+from .game_output import GameOutput, GameOutputGumbelSoftmax
 from .game_base import GameBase
 
 
@@ -30,14 +29,19 @@ class EnsembleBetaVAEGame(GameBase):
         sender_update_prob: float = 1,
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
+        gumbel_softmax_mode: bool = False,
     ) -> None:
-        super().__init__(lr=lr, optimizer_class=optimizer_class)
+        super().__init__(
+            lr=lr,
+            optimizer_class=optimizer_class,
+            weight_decay=weight_decay,
+            gumbel_softmax_mode=gumbel_softmax_mode,
+        )
         assert len(senders) == len(receivers)
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta = beta
         self.baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = baseline_type
-        self.weight_decay = weight_decay
         self.sender_update_prob = sender_update_prob
         self.receiver_update_prob = receiver_update_prob
         self.prior_update_prob = prior_update_prob
@@ -142,20 +146,77 @@ class EnsembleBetaVAEGame(GameBase):
             + negative_advantages.pow(2).sum(dim=-1) * update_sender
         ).mean()
 
-        # We do not use `weight_decay` in pytorch optimizers,
-        # because they would also update the parameters of unchosen senders/receivers.
-        l2_regularizer = 0
-        for p in itertools.chain.from_iterable([sender.parameters(), receiver.parameters(), self.prior.parameters()]):
-            l2_regularizer = l2_regularizer + p.pow(2).sum()
-
-        surrogate_loss = surrogate_loss + self.weight_decay * l2_regularizer
-
         matching_count = (output_r.logits.argmax(dim=-1) == batch.target_label).long()
         while len(matching_count.shape) > 1:
             matching_count = matching_count.sum(dim=-1)
         acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
 
         return GameOutput(
+            loss=surrogate_loss,
+            communication_loss=communication_loss,
+            acc=acc,
+            sender_output=output_s,
+            receiver_output=output_r,
+        )
+
+    def forward_gumbel_softmax(
+        self,
+        batch: Batch,
+        sender_index: Optional[int] = None,
+        receiver_index: Optional[int] = None,
+    ):
+        if sender_index is None:
+            sender_index = int(randint(low=0, high=len(self.senders), size=()).item())
+        if receiver_index is None:
+            receiver_index = int(randint(low=0, high=len(self.receivers), size=()).item())
+
+        sender = self.senders[sender_index]
+        receiver = self.receivers[receiver_index]
+
+        output_s = sender.forward_gumbel_softmax(batch.input)
+        output_r = receiver.forward_gumbel_softmax(
+            message=output_s.message,
+            candidates=batch.candidates,
+        )
+        output_p = self.prior.forward_gumbel_softmax(
+            message=output_s.message,
+        )
+
+        surrogate_loss = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
+        communication_loss = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
+        acc = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
+        not_ended = torch.ones(size=(batch.batch_size,), device=self.device)
+
+        for step in range(output_s.message.shape[-2]):
+            logits_r = output_r.logits[:, step]
+            degree_of_eos = output_s.message[:, step, 0]
+
+            step_communication_loss = self.cross_entropy_loss.forward(
+                input=logits_r.permute(0, -1, *tuple(range(1, len(logits_r.shape) - 1))),
+                target=batch.target_label,
+            )
+            while len(step_communication_loss.shape) > 1:
+                step_communication_loss = step_communication_loss.sum(dim=-1)
+            communication_loss = communication_loss + degree_of_eos * not_ended * step_communication_loss
+
+            step_surrogate_loss = step_communication_loss + (
+                output_s.message_log_probs[:, : step + 1].sum(dim=-1) - output_p.message_log_likelihood[:, step]
+            ) * self.beta / len(self.senders)
+            surrogate_loss = surrogate_loss + degree_of_eos * not_ended * step_surrogate_loss
+
+            matching_count = (logits_r.argmax(dim=-1) == batch.target_label).long()
+            while len(matching_count.shape) > 1:
+                matching_count = matching_count.sum(dim=-1)
+            step_acc = (
+                matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))
+            ).float()
+            acc = acc + degree_of_eos * not_ended * step_acc
+
+            not_ended = not_ended * (1.0 - degree_of_eos)
+
+            assert surrogate_loss.isnan().logical_not().any(), (step, output_s.message_log_probs[:, step].isnan().any())
+
+        return GameOutputGumbelSoftmax(
             loss=surrogate_loss,
             communication_loss=communication_loss,
             acc=acc,

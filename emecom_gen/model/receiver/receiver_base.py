@@ -2,11 +2,15 @@ from torch.nn import Module
 from torch import Tensor
 from typing import Optional
 
-from .receiver_output import ReceiverOutput
+from .receiver_output import ReceiverOutput, ReceiverOutputGumbelSoftmax
 
 
 class ReceiverBase(Module):
-    def __init__(self) -> None:
+    vocab_size: int
+
+    def __init__(
+        self,
+    ) -> None:
         super().__init__()
 
     def forward(
@@ -15,6 +19,13 @@ class ReceiverBase(Module):
         message_length: Tensor,
         candidates: Optional[Tensor],
     ) -> ReceiverOutput:
+        raise NotImplementedError()
+
+    def forward_gumbel_softmax(
+        self,
+        message: Tensor,
+        candidates: Optional[Tensor],
+    ) -> ReceiverOutputGumbelSoftmax:
         raise NotImplementedError()
 
 

@@ -4,7 +4,7 @@ from typing import Callable, Literal, Optional
 import torch
 
 from .receiver_base import ReceiverBase
-from .receiver_output import ReceiverOutput
+from .receiver_output import ReceiverOutput, ReceiverOutputGumbelSoftmax
 
 
 class RnnReceiverBase(ReceiverBase):
@@ -64,6 +64,31 @@ class RnnReceiverBase(ReceiverBase):
             h = not_ended * next_h + (1 - not_ended) * h
 
         return ReceiverOutput(logits=self._compute_logits_from_hidden_state(h, candidates))
+
+    def forward_gumbel_softmax(
+        self,
+        message: Tensor,
+        candidates: Optional[Tensor] = None,
+    ) -> ReceiverOutputGumbelSoftmax:
+        batch_size = message.shape[0]
+        device = message.device
+
+        embedded_message = torch.matmul(message, self.symbol_embedding.weight)
+
+        h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
+        c = torch.zeros_like(h)
+
+        logits_list: list[Tensor] = []
+
+        for step in range(message.shape[-2]):
+            if isinstance(self.cell, LSTMCell):
+                h, c = self.cell.forward(embedded_message[:, step], (h, c))
+            else:
+                h = self.cell.forward(embedded_message[:, step], h)
+            step_logits = self._compute_logits_from_hidden_state(h, candidates)
+            logits_list.append(step_logits)
+
+        return ReceiverOutputGumbelSoftmax(logits=torch.stack(logits_list, dim=1))
 
 
 class RnnReconstructiveReceiver(RnnReceiverBase):

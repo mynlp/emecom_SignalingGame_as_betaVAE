@@ -53,3 +53,28 @@ class SenderOutput:
         else:
             is_eos = (self.message == 0).long()
             return ((is_eos.cumsum(dim=-1) - is_eos) == 0).float()
+
+
+@dataclasses.dataclass(frozen=True)
+class SenderOutputGumbelSoftmax:
+    message: Tensor
+    logits: Tensor
+    fix_message_length: bool
+    straight_through: bool
+    encoder_hidden_state: Tensor
+
+    @property
+    def device(self):
+        return self.message.device
+
+    @property
+    def message_log_probs(self) -> Tensor:
+        return (self.logits.softmax(dim=-1) * self.message).sum(dim=-1).log()
+
+    @property
+    def entropies(self) -> Tensor:
+        return Categorical(logits=self.logits).entropy()
+
+    @property
+    def normalized_entropies(self) -> Tensor:
+        return self.entropies / torch.as_tensor(self.logits.shape[-1], device=self.logits.device).log()

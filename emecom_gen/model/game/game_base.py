@@ -7,7 +7,7 @@ import itertools
 from ...data.batch import Batch
 from ..sender import SenderBase
 from ..receiver import ReceiverBase
-from .game_output import GameOutput
+from .game_output import GameOutput, GameOutputGumbelSoftmax
 
 
 class GameBase(LightningModule):
@@ -18,9 +18,13 @@ class GameBase(LightningModule):
         self,
         lr: float,
         optimizer_class: Literal["adam", "sgd"],
+        weight_decay: float = 0,
+        gumbel_softmax_mode: bool = False,
     ) -> None:
         super().__init__()
         self.lr = lr
+        self.weight_decay = weight_decay
+        self.gumbel_softmax_mode = gumbel_softmax_mode
         self.automatic_optimization = False
 
         match optimizer_class:
@@ -40,6 +44,14 @@ class GameBase(LightningModule):
     ) -> GameOutput:
         raise NotImplementedError()
 
+    def forward_gumbel_softmax(
+        self,
+        batch: Batch,
+        sender_index: Optional[int] = None,
+        receiver_index: Optional[int] = None,
+    ) -> GameOutputGumbelSoftmax:
+        raise NotImplementedError()
+
     def training_step(
         self,
         batch: Batch,
@@ -48,11 +60,18 @@ class GameBase(LightningModule):
         sender_index = int(torch.randint(low=0, high=len(self.senders), size=()).item())
         receiver_index = int(torch.randint(low=0, high=len(self.receivers), size=()).item())
 
-        game_output = self.forward(
-            batch,
-            sender_index=sender_index,
-            receiver_index=receiver_index,
-        )
+        if self.gumbel_softmax_mode:
+            game_output = self.forward_gumbel_softmax(
+                batch,
+                sender_index=sender_index,
+                receiver_index=receiver_index,
+            )
+        else:
+            game_output = self.forward(
+                batch,
+                sender_index=sender_index,
+                receiver_index=receiver_index,
+            )
 
         optimizers = self.optimizers()
         sender_optimizer: Adam | SGD = optimizers[sender_index]
@@ -100,5 +119,8 @@ class GameBase(LightningModule):
         torch.cuda.synchronize()
 
     def configure_optimizers(self) -> list[Adam | SGD]:
-        optimizers = [self.optimizer_class(x.parameters(), lr=self.lr) for x in self.senders + self.receivers]
+        optimizers = [
+            self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            for x in self.senders + self.receivers
+        ]
         return optimizers
