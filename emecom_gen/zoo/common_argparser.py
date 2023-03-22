@@ -37,6 +37,8 @@ class CommonArgumentParser(Tap):
     optimizer_class: Literal["adam", "sgd"] = "sgd"
     weight_decay: float = 0
 
+    gumbel_softmax_mode: bool = False
+
     heldout_ratio: float = 0  # Ratio of held-out datapoints.
     random_seed: int = 2023  # Random seed.
 
