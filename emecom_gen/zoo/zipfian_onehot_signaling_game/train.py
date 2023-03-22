@@ -33,6 +33,7 @@ class ArgumentParser(CommonArgumentParser):
                     f"len{self.max_len:0>4}",
                     f"pop{self.n_agent_pairs:0>4}",
                     f"prior{self.prior_type}",
+                    f"beta{self.beta}",
                     f"scell{self.sender_cell_type}",
                     f"rcell{self.receiver_cell_type}",
                     f"seed{self.random_seed:0>4}",
@@ -107,8 +108,6 @@ def main():
                 n_hidden_states=args.hmm_prior_num_hidden_states,
                 n_observable_states=args.vocab_size,
             )
-        case _:
-            raise ValueError(f"Unknown prior type {args.prior_type}")
 
     model = EnsembleBetaVAEGame(
         senders=senders,
@@ -118,10 +117,12 @@ def main():
         lr=args.lr,
         weight_decay=args.weight_decay,
         baseline_type=args.baseline_type,
+        reward_normalization_type=args.reward_normalization_type,
         optimizer_class=args.optimizer_class,
         sender_update_prob=args.sender_update_prob,
         receiver_update_prob=args.receiver_update_prob,
         prior_update_prob=args.prior_update_prob,
+        gumbel_softmax_mode=args.gumbel_softmax_mode,
     )
 
     logger.info("Create a trainer")

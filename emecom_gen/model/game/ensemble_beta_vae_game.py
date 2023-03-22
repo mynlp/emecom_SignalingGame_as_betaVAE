@@ -24,7 +24,8 @@ class EnsembleBetaVAEGame(GameBase):
         lr: float = 0.0001,
         weight_decay: float = 0,
         beta: float = 1,
-        baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = "batch-mean",
+        baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean",
+        reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
         sender_update_prob: float = 1,
         receiver_update_prob: float = 1,
@@ -41,7 +42,8 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta = beta
-        self.baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = baseline_type
+        self.baseline_type: Literal["batch-mean", "critic-in-sender"] = baseline_type
+        self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
         self.sender_update_prob = sender_update_prob
         self.receiver_update_prob = receiver_update_prob
         self.prior_update_prob = prior_update_prob
@@ -107,13 +109,14 @@ class EnsembleBetaVAEGame(GameBase):
         match self.baseline_type:
             case "batch-mean":
                 baseline = negative_returns.mean(dim=0, keepdim=True).detach()
-                denominator = 1
-            case "batch-mean-std":
-                baseline = negative_returns.mean(dim=0, keepdim=True).detach()
-                denominator = negative_returns.std(dim=0, unbiased=False, keepdim=True).clamp(min=1e-8).detach()
             case "critic-in-sender":
                 baseline = inversed_cumsum(output_s.estimated_value * mask, dim=-1)
+
+        match self.reward_normalization_type:
+            case "none":
                 denominator = 1
+            case "std":
+                denominator = negative_returns.std(dim=0, unbiased=False, keepdim=True).clamp(min=1e-8).detach()
 
         negative_advantages = (negative_returns.detach() - baseline) / denominator
 

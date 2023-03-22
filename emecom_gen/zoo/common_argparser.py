@@ -33,7 +33,8 @@ class CommonArgumentParser(Tap):
     num_workers: int = 4  # Number of workers of data loader.
     lr: float = 1e-4  # Learning rate.
     beta: float = 1  # Beta coefficient of beta-VAE.
-    baseline_type: Literal["batch-mean", "batch-mean-std", "critic-in-sender"] = "batch-mean"
+    baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean"
+    reward_normalization_type: Literal["none", "std"] = "none"
     optimizer_class: Literal["adam", "sgd"] = "sgd"
     weight_decay: float = 0
 
