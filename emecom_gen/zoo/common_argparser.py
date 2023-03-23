@@ -32,9 +32,12 @@ class CommonArgumentParser(Tap):
     batch_size: int = 1024  # Batch size of data loader.
     num_workers: int = 4  # Number of workers of data loader.
     lr: float = 1e-4  # Learning rate.
-    beta: float = 1  # Beta coefficient of beta-VAE.
     baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean"
     reward_normalization_type: Literal["none", "std"] = "none"
+    beta_scheduler_type: Literal["constant", "sigmoid"] = "constant"
+    beta_constant_value: float = 1
+    beta_sigmoid_gain: float = 0.01
+    beta_sigmoid_offset: float = 1000
     optimizer_class: Literal["adam", "sgd"] = "sgd"
     weight_decay: float = 0
 

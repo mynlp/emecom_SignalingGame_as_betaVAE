@@ -9,6 +9,7 @@ from ..receiver import ReceiverBase
 from ..message_prior import MessagePriorBase
 from .game_output import GameOutput, GameOutputGumbelSoftmax
 from .game_base import GameBase
+from .beta_scheduler import BetaSchedulerBase, ConstantBetaScheduler
 
 
 def inversed_cumsum(x: Tensor, dim: int):
@@ -23,7 +24,7 @@ class EnsembleBetaVAEGame(GameBase):
         message_prior: MessagePriorBase,
         lr: float = 0.0001,
         weight_decay: float = 0,
-        beta: float = 1,
+        beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
         baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
@@ -41,7 +42,7 @@ class EnsembleBetaVAEGame(GameBase):
         assert len(senders) == len(receivers)
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
-        self.beta = beta
+        self.beta_scheduler = beta_scheduler
         self.baseline_type: Literal["batch-mean", "critic-in-sender"] = baseline_type
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
         self.sender_update_prob = sender_update_prob
@@ -92,6 +93,7 @@ class EnsembleBetaVAEGame(GameBase):
             communication_loss = communication_loss.sum(dim=-1)
 
         mask = output_s.message_mask
+        beta = self.beta_scheduler.forward(self.global_step)
 
         negative_returns = (
             communication_loss.detach().unsqueeze(-1)
@@ -102,7 +104,7 @@ class EnsembleBetaVAEGame(GameBase):
                 )
                 - output_p.message_log_likelihood.detach().unsqueeze(-1)
             )
-            * self.beta
+            * beta
             / len(self.senders)
         ) * mask
 
@@ -144,7 +146,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         surrogate_loss = (
             communication_loss * update_receiver
-            - output_p.message_log_likelihood * update_prior * self.beta / len(self.senders)
+            - output_p.message_log_likelihood * update_prior * beta / len(self.senders)
             + (negative_advantages.detach() * output_s.message_log_probs).sum(dim=-1) * update_sender
             + negative_advantages.pow(2).sum(dim=-1) * update_sender
         ).mean()

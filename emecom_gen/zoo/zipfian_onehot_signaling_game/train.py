@@ -11,7 +11,7 @@ from ...metrics import DumpLanguage
 from ...model.sender import RnnReinforceSender
 from ...model.receiver import RnnReconstructiveReceiver
 from ...model.message_prior import UniformMessagePrior, LengthExponentialMessagePrior, HiddenMarkovMessagePrior
-from ...model.game import EnsembleBetaVAEGame
+from ...model.game import EnsembleBetaVAEGame, ConstantBetaScheduler, SigmoidBetaScheduler
 from ..common_argparser import CommonArgumentParser
 
 
@@ -33,7 +33,6 @@ class ArgumentParser(CommonArgumentParser):
                     f"len{self.max_len:0>4}",
                     f"pop{self.n_agent_pairs:0>4}",
                     f"prior{self.prior_type}",
-                    f"beta{self.beta}",
                     f"scell{self.sender_cell_type}",
                     f"rcell{self.receiver_cell_type}",
                     f"seed{self.random_seed:0>4}",
@@ -109,13 +108,19 @@ def main():
                 n_observable_states=args.vocab_size,
             )
 
+    match args.beta_scheduler_type:
+        case "constant":
+            beta_scheduler = ConstantBetaScheduler(args.beta_constant_value)
+        case "sigmoid":
+            beta_scheduler = SigmoidBetaScheduler(args.beta_sigmoid_gain, args.beta_sigmoid_offset)
+
     model = EnsembleBetaVAEGame(
         senders=senders,
         receivers=receivers,
         message_prior=prior,
-        beta=args.beta,
         lr=args.lr,
         weight_decay=args.weight_decay,
+        beta_scheduler=beta_scheduler,
         baseline_type=args.baseline_type,
         reward_normalization_type=args.reward_normalization_type,
         optimizer_class=args.optimizer_class,
