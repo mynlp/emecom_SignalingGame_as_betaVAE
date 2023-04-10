@@ -1,6 +1,5 @@
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning import Trainer
-from pathlib import Path
 from torch.utils.data import DataLoader
 from typing import Optional, Hashable, TypeVar, Generic, Sequence
 from collections import defaultdict, Counter
