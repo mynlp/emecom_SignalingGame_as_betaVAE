@@ -254,7 +254,7 @@ class HarrisSchemeBasedMetrics(Callback):
                 messages: list[list[int]] = []
                 for batch in dataloader:
                     batch: Batch = batch.to(pl_module.device)
-                    output = sender.forward(batch.input)
+                    output = sender.forward(batch)
                     messages.extend(
                         m[:length] for m, length in zip(output.message.tolist(), output.message_length.tolist())
                     )
