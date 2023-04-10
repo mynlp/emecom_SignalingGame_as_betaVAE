@@ -1,5 +1,6 @@
 from pytorch_lightning import LightningModule
 from typing import Any, Optional, Literal
+from torch.nn import Parameter
 from torch.optim import Adam, SGD
 import torch
 import itertools
@@ -7,12 +8,14 @@ import itertools
 from ...data.batch import Batch
 from ..sender import SenderBase
 from ..receiver import ReceiverBase
+from ..message_prior import MessagePriorBase
 from .game_output import GameOutput, GameOutputGumbelSoftmax
 
 
 class GameBase(LightningModule):
     senders: list[SenderBase]
     receivers: list[ReceiverBase]
+    prior: MessagePriorBase
 
     def __init__(
         self,
@@ -75,17 +78,20 @@ class GameBase(LightningModule):
                 receiver_index=receiver_index,
             )
 
-        optimizers = self.optimizers()
-        sender_optimizer: Adam | SGD = optimizers[sender_index]
-        receiver_optimizer: Adam | SGD = optimizers[len(self.senders) + receiver_index]
+        optimizers: list[Adam | SGD] = self.optimizers()
+        sender_optimizer = optimizers[sender_index]
+        receiver_optimizer = optimizers[len(self.senders) + receiver_index]
+        prior_optimizer = optimizers[-1]
 
         sender_optimizer.zero_grad()
         receiver_optimizer.zero_grad()
+        prior_optimizer.zero_grad()
 
         self.manual_backward(game_output.loss.mean())
 
         sender_optimizer.step()
         receiver_optimizer.step()
+        prior_optimizer.step()
 
         self.log_dict(
             game_output.make_log_dict(
@@ -129,8 +135,13 @@ class GameBase(LightningModule):
         torch.cuda.synchronize()
 
     def configure_optimizers(self) -> list[Adam | SGD]:
-        optimizers = [
-            self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-            for x in self.senders + self.receivers
-        ]
+        optimizers: list[Adam | SGD] = []
+
+        for x in self.senders + self.receivers + [self.prior]:
+            if len(list(x.parameters())) == 0:
+                dummy_parameter = Parameter(data=torch.zeros(size=(0,)))
+                optimizers.append(self.optimizer_class([dummy_parameter], lr=self.lr, weight_decay=self.weight_decay))
+            else:
+                optimizers.append(self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay))
+
         return optimizers
