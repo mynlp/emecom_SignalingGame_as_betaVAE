@@ -27,6 +27,8 @@ class GameBase(LightningModule):
         self.gumbel_softmax_mode = gumbel_softmax_mode
         self.automatic_optimization = False
 
+        self.batch_step = 0
+
         match optimizer_class:
             case "adam":
                 self.optimizer_class = Adam
@@ -91,6 +93,14 @@ class GameBase(LightningModule):
             ),
             batch_size=batch.batch_size,
         )
+
+    def on_train_batch_end(
+        self,
+        outputs: Any,
+        batch: Any,
+        batch_idx: int,
+    ) -> None:
+        self.batch_step += 1
 
     def validation_step(
         self,
