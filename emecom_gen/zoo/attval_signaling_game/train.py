@@ -3,13 +3,14 @@ from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from logzero import logger
 import json
+import torch
 
 
 from ...data import AttributeValueDataModule
 from ...model.sender import RnnReinforceSender
 from ...model.receiver import RnnReconstructiveReceiver
 from ...model.message_prior import UniformMessagePrior, LengthExponentialMessagePrior, HiddenMarkovMessagePrior
-from ...model.game import EnsembleBetaVAEGame
+from ...model.game import EnsembleBetaVAEGame, ConstantBetaScheduler, SigmoidBetaScheduler, AccuracyBasedBetaScheduler
 from ...metrics import TopographicSimilarity, DumpLanguage, HarrisSchemeBasedMetrics
 from ..common_argparser import CommonArgumentParser
 from .additional_archs import AttributeValueEncoder, AttributeValueDecoder
@@ -22,17 +23,50 @@ class ArgumentParser(CommonArgumentParser):
 
     def process_args(self) -> None:
         if self.experiment_version == "":
-            self.experiment_version = "_".join(
-                [
-                    f"att{self.n_attributes:0>4}",
-                    f"val{self.n_values:0>4}",
-                    f"voc{self.vocab_size:0>4}",
-                    f"len{self.max_len:0>4}",
-                    f"pop{self.n_agent_pairs:0>4}",
-                    f"prior{self.prior_type}",
-                    f"seed{self.random_seed:0>4}",
-                ]
-            )
+            beta_scheduler_info = f"BETA{self.beta_scheduler_type}"
+
+            match self.beta_scheduler_type:
+                case "constant":
+                    beta_scheduler_info += f"V{self.beta_constant_value}"
+                case "sigmoid":
+                    beta_scheduler_info += f"G{self.beta_sigmoid_gain}O{self.beta_sigmoid_offset}"
+                case "acc-based":
+                    beta_scheduler_info += f"E{self.beta_accbased_exponent}S{self.beta_accbased_smoothing_factor}"
+
+            if self.gumbel_softmax_mode:
+                self.experiment_version = "_".join(
+                    [
+                        f"ATT{self.n_attributes:0>4}",
+                        f"VAL{self.n_values:0>4}",
+                        f"VOC{self.vocab_size:0>4}",
+                        f"LEN{self.max_len:0>4}",
+                        f"POP{self.n_agent_pairs:0>4}",
+                        f"PRIOR{self.prior_type}",
+                        beta_scheduler_info,
+                        f"GS{self.gumbel_softmax_mode}",
+                        f"SCELL{self.sender_cell_type}",
+                        f"RCELL{self.receiver_cell_type}",
+                        f"SEED{self.random_seed:0>4}",
+                    ]
+                )
+            else:
+                self.experiment_version = "_".join(
+                    [
+                        f"ATT{self.n_attributes:0>4}",
+                        f"VAL{self.n_values:0>4}",
+                        f"VOC{self.vocab_size:0>4}",
+                        f"LEN{self.max_len:0>4}",
+                        f"POP{self.n_agent_pairs:0>4}",
+                        f"PRIOR{self.prior_type}",
+                        beta_scheduler_info,
+                        f"GS{self.gumbel_softmax_mode}",
+                        f"BASELINE{self.baseline_type}",
+                        f"NORM{self.reward_normalization_type}",
+                        f"SCELL{self.sender_cell_type}",
+                        f"RCELL{self.receiver_cell_type}",
+                        f"SEED{self.random_seed:0>4}",
+                    ]
+                )
 
         super().process_args()
 
@@ -97,7 +131,11 @@ def main():
                 max_len=args.max_len,
             )
         case "length-exponential":
-            prior = LengthExponentialMessagePrior(args.length_exponential_prior_base)
+            prior = LengthExponentialMessagePrior(
+                vocab_size=args.vocab_size,
+                max_len=args.max_len,
+                base=args.length_exponential_prior_base,
+            )
             if args.length_exponential_prior_base == 1:
                 logger.warning(
                     "`args.prior_type == 'length-exponential'` while `args.length_exponential_base == 1`. "
@@ -113,21 +151,31 @@ def main():
                 n_hidden_states=args.hmm_prior_num_hidden_states,
                 n_observable_states=args.vocab_size,
             )
-        case _:
-            raise ValueError(f"Unknown prior type {args.prior_type}")
+
+    match args.beta_scheduler_type:
+        case "constant":
+            beta_scheduler = ConstantBetaScheduler(args.beta_constant_value)
+        case "sigmoid":
+            beta_scheduler = SigmoidBetaScheduler(args.beta_sigmoid_gain, args.beta_sigmoid_offset)
+        case "acc-based":
+            beta_scheduler = AccuracyBasedBetaScheduler(
+                args.beta_accbased_exponent, args.beta_accbased_smoothing_factor
+            )
 
     model = EnsembleBetaVAEGame(
         senders=senders,
         receivers=receivers,
         message_prior=prior,
-        beta=args.beta,
         lr=args.lr,
         weight_decay=args.weight_decay,
+        beta_scheduler=beta_scheduler,
         baseline_type=args.baseline_type,
+        reward_normalization_type=args.reward_normalization_type,
         optimizer_class=args.optimizer_class,
         sender_update_prob=args.sender_update_prob,
         receiver_update_prob=args.receiver_update_prob,
         prior_update_prob=args.prior_update_prob,
+        gumbel_softmax_mode=args.gumbel_softmax_mode,
     )
 
     logger.info("Create a trainer")
@@ -162,9 +210,11 @@ def main():
         accelerator=args.accelerator,
         devices=args.devices,
         max_epochs=args.n_epochs,
-        check_val_every_n_epoch=1,
+        check_val_every_n_epoch=args.check_val_every_n_epoch,
+        enable_progress_bar=False,
     )
 
+    torch.set_float32_matmul_precision("high")
     trainer.fit(model=model, datamodule=datamodule)
 
 
