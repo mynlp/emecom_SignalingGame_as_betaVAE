@@ -4,6 +4,7 @@ from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from torch.nn import Linear
 from logzero import logger
 import json
+import torch
 
 
 from ...data import ZipfianOneHotDataModule
@@ -175,6 +176,7 @@ def main():
 
     logger.info("Start fitting.")
 
+    torch.set_float32_matmul_precision("high")
     trainer.fit(model=model, datamodule=datamodule)
 
 
