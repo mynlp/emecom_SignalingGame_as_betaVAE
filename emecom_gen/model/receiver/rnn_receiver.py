@@ -58,7 +58,7 @@ class RnnReceiverBase(ReceiverBase):
             not_ended = (step < message_length).unsqueeze(1).float()
             if isinstance(self.cell, LSTMCell):
                 next_h, next_c = self.cell.forward(embedded_message[:, step], (h, c))
-                c = not_ended * next_c + (1 - not_ended) * h
+                c = not_ended * next_c + (1 - not_ended) * c
             else:
                 next_h = self.cell.forward(embedded_message[:, step], h)
             h = not_ended * next_h + (1 - not_ended) * h
