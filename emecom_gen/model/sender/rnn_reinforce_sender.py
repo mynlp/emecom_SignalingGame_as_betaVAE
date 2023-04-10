@@ -13,6 +13,7 @@ from torch.distributions import Categorical
 from typing import Callable, Literal
 import torch
 
+from ...data import Batch
 from .sender_output import SenderOutput, SenderOutputGumbelSoftmax
 from .sender_base import SenderBase
 
@@ -70,10 +71,11 @@ class RnnReinforceSender(SenderBase):
     def reset_parameters(self):
         torch.nn.init.normal_(self.bos_embedding)
 
-    def __call__(self, input: Tensor) -> SenderOutput:
-        return self.forward(input)
+    def __call__(self, batch: Batch) -> SenderOutput:
+        return self.forward(batch)
 
-    def forward(self, input: Tensor) -> SenderOutput:
+    def forward(self, batch: Batch) -> SenderOutput:
+        input = batch.input
         batch_size = input.shape[0]
 
         encoder_hidden_state = self.object_encoder(input)
@@ -124,9 +126,10 @@ class RnnReinforceSender(SenderBase):
             encoder_hidden_state=encoder_hidden_state,
         )
 
-    def forward_gumbel_softmax(self, input: Tensor) -> SenderOutputGumbelSoftmax:
+    def forward_gumbel_softmax(self, batch: Batch) -> SenderOutputGumbelSoftmax:
+        input = batch.input
+
         batch_size = input.shape[0]
-        device = input.device
 
         encoder_hidden_state = self.object_encoder(input)
         encoder_hidden_state = self.layer_norm.forward(encoder_hidden_state)
