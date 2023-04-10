@@ -45,6 +45,7 @@ class ArgumentParser(CommonArgumentParser):
                     f"POP{self.n_agent_pairs:0>4}",
                     f"PRIOR{self.prior_type}",
                     beta_scheduler_info,
+                    f"BASELINE{self.baseline_type}",
                     f"SCELL{self.sender_cell_type}",
                     f"RCELL{self.receiver_cell_type}",
                     f"SEED{self.random_seed:0>4}",
