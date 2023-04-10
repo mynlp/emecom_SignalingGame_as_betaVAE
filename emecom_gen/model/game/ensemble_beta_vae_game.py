@@ -74,7 +74,7 @@ class EnsembleBetaVAEGame(GameBase):
         sender = self.senders[sender_index]
         receiver = self.receivers[receiver_index]
 
-        output_s = sender.forward(batch.input)
+        output_s = sender.forward(batch)
         output_r = receiver.forward(
             message=output_s.message,
             message_length=output_s.message_length,
@@ -85,6 +85,11 @@ class EnsembleBetaVAEGame(GameBase):
             message_length=output_s.message_length,
         )
 
+        matching_count = (output_r.logits.argmax(dim=-1) == batch.target_label).long()
+        while len(matching_count.shape) > 1:
+            matching_count = matching_count.sum(dim=-1)
+        acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
+
         communication_loss = self.cross_entropy_loss.forward(
             input=output_r.logits.permute(0, -1, *tuple(range(1, len(output_r.logits.shape) - 1))),
             target=batch.target_label,
@@ -93,16 +98,15 @@ class EnsembleBetaVAEGame(GameBase):
             communication_loss = communication_loss.sum(dim=-1)
 
         mask = output_s.message_mask
-        beta = self.beta_scheduler.forward(self.global_step)
+        beta = self.beta_scheduler.forward(self.batch_step, acc=acc)
 
         negative_returns = (
             communication_loss.detach().unsqueeze(-1)
             + (
                 inversed_cumsum(
-                    output_s.message_log_probs.detach() * mask,
+                    (output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask,
                     dim=-1,
                 )
-                - output_p.message_log_likelihood.detach().unsqueeze(-1)
             )
             * beta
             / len(self.senders)
@@ -146,15 +150,10 @@ class EnsembleBetaVAEGame(GameBase):
 
         surrogate_loss = (
             communication_loss * update_receiver
-            - output_p.message_log_likelihood * update_prior * beta / len(self.senders)
-            + (negative_advantages.detach() * output_s.message_log_probs).sum(dim=-1) * update_sender
+            - (output_p.message_log_probs * mask).sum(dim=-1) * update_prior * beta / len(self.senders)
+            + (negative_advantages.detach() * output_s.message_log_probs * mask).sum(dim=-1) * update_sender
             + negative_advantages.pow(2).sum(dim=-1) * update_sender
         ).mean()
-
-        matching_count = (output_r.logits.argmax(dim=-1) == batch.target_label).long()
-        while len(matching_count.shape) > 1:
-            matching_count = matching_count.sum(dim=-1)
-        acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
 
         return GameOutput(
             loss=surrogate_loss,
@@ -178,7 +177,7 @@ class EnsembleBetaVAEGame(GameBase):
         sender = self.senders[sender_index]
         receiver = self.receivers[receiver_index]
 
-        output_s = sender.forward_gumbel_softmax(batch.input)
+        output_s = sender.forward_gumbel_softmax(batch)
         output_r = receiver.forward_gumbel_softmax(
             message=output_s.message,
             candidates=batch.candidates,
@@ -187,8 +186,8 @@ class EnsembleBetaVAEGame(GameBase):
             message=output_s.message,
         )
 
-        surrogate_loss = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
         communication_loss = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
+        kl_term_loss = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
         acc = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
         not_ended = torch.ones(size=(batch.batch_size,), device=self.device)
 
@@ -204,10 +203,10 @@ class EnsembleBetaVAEGame(GameBase):
                 step_communication_loss = step_communication_loss.sum(dim=-1)
             communication_loss = communication_loss + degree_of_eos * not_ended * step_communication_loss
 
-            step_surrogate_loss = step_communication_loss + (
-                output_s.message_log_probs[:, : step + 1].sum(dim=-1) - output_p.message_log_likelihood[:, step]
-            ) * self.beta / len(self.senders)
-            surrogate_loss = surrogate_loss + degree_of_eos * not_ended * step_surrogate_loss
+            step_kl_term_loss = (
+                output_s.message_log_probs[:, : step + 1] - output_p.message_log_probs[:, : step + 1]
+            ).sum(dim=-1)
+            kl_term_loss = kl_term_loss + degree_of_eos * not_ended * step_kl_term_loss
 
             matching_count = (logits_r.argmax(dim=-1) == batch.target_label).long()
             while len(matching_count.shape) > 1:
@@ -219,7 +218,8 @@ class EnsembleBetaVAEGame(GameBase):
 
             not_ended = not_ended * (1.0 - degree_of_eos)
 
-            assert surrogate_loss.isnan().logical_not().any(), (step, output_s.message_log_probs[:, step].isnan().any())
+        beta = self.beta_scheduler.forward(step=self.batch_step, acc=acc)
+        surrogate_loss = communication_loss + beta * len(self.senders) * kl_term_loss
 
         return GameOutputGumbelSoftmax(
             loss=surrogate_loss,
