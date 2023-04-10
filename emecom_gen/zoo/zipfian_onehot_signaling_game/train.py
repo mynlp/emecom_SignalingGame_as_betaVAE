@@ -94,9 +94,16 @@ def main():
 
     match args.prior_type:
         case "uniform":
-            prior = UniformMessagePrior()
+            prior = UniformMessagePrior(
+                vocab_size=args.vocab_size,
+                max_len=args.max_len,
+            )
         case "length-exponential":
-            prior = LengthExponentialMessagePrior(args.length_exponential_prior_base)
+            prior = LengthExponentialMessagePrior(
+                vocab_size=args.vocab_size,
+                max_len=args.max_len,
+                base=args.length_exponential_prior_base,
+            )
             if args.length_exponential_prior_base == 1:
                 logger.warning(
                     "`args.prior_type == 'length-exponential'` while `args.length_exponential_base == 1`. "
