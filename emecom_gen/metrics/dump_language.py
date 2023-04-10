@@ -103,8 +103,8 @@ class DumpLanguage(Callback):
                 batch: Batch = batch.to(pl_module.device)
 
                 for sender_idx, sender in list(enumerate(pl_module.senders)):
-                    sender_output = sender.forward(batch.input)
-                    messages[sender_idx].extend((sender_output.message * sender_output.message_mask).tolist())
+                    sender_output = sender.forward(batch)
+                    messages[sender_idx].extend((sender_output.message * sender_output.message_mask.long()).tolist())
                     message_lengths[sender_idx].extend(sender_output.message_length.tolist())
 
             for sender_idx in messages.keys():
