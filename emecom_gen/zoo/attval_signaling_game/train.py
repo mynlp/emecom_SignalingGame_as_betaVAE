@@ -30,7 +30,6 @@ class ArgumentParser(CommonArgumentParser):
                     f"len{self.max_len:0>4}",
                     f"pop{self.n_agent_pairs:0>4}",
                     f"prior{self.prior_type}",
-                    f"beta{self.beta:.5e}",
                     f"seed{self.random_seed:0>4}",
                 ]
             )
@@ -93,7 +92,10 @@ def main():
 
     match args.prior_type:
         case "uniform":
-            prior = UniformMessagePrior()
+            prior = UniformMessagePrior(
+                vocab_size=args.vocab_size,
+                max_len=args.max_len,
+            )
         case "length-exponential":
             prior = LengthExponentialMessagePrior(args.length_exponential_prior_base)
             if args.length_exponential_prior_base == 1:
