@@ -16,13 +16,13 @@ class CommonArgumentParser(Tap):
     max_len: int = 2  # Maximum length of message.
     fix_message_length: bool = True  # Wether to fix message length.
 
-    sender_embedding_dim: int = 10  # Embedding dim.
+    sender_embedding_dim: int = 100  # Embedding dim.
     sender_hidden_size: int = 512  # Hidden size.
-    sender_cell_type: Literal["rnn", "gru", "lstm"] = "gru"  # RNN cell type.
+    sender_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # RNN cell type.
 
-    receiver_embedding_dim: int = 10  # Embedding dim.
-    receiver_hidden_size: int = 64  # Hidden size.
-    receiver_cell_type: Literal["rnn", "gru", "lstm"] = "gru"  # RNN cell type.
+    receiver_embedding_dim: int = 100  # Embedding dim.
+    receiver_hidden_size: int = 128  # Hidden size.
+    receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # RNN cell type.
 
     sender_update_prob: float = 1
     receiver_update_prob: float = 1
@@ -34,11 +34,11 @@ class CommonArgumentParser(Tap):
     lr: float = 1e-4  # Learning rate.
     baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean"
     reward_normalization_type: Literal["none", "std"] = "none"
-    beta_scheduler_type: Literal["constant", "sigmoid"] = "constant"
+    beta_scheduler_type: Literal["constant", "sigmoid", "acc-based"] = "constant"
     beta_constant_value: float = 1
     beta_sigmoid_gain: float = 0.01
     beta_sigmoid_offset: float = 1000
-    optimizer_class: Literal["adam", "sgd"] = "sgd"
+    optimizer_class: Literal["adam", "sgd"] = "adam"
     weight_decay: float = 0
 
     gumbel_softmax_mode: bool = False
