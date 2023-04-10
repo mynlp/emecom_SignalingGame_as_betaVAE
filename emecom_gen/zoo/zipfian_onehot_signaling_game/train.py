@@ -37,22 +37,38 @@ class ArgumentParser(CommonArgumentParser):
                 case "acc-based":
                     beta_scheduler_info += f"E{self.beta_accbased_exponent}S{self.beta_accbased_smoothing_factor}"
 
-            self.experiment_version = "_".join(
-                [
-                    f"FEATURE{self.n_features:0>4}",
-                    f"VOC{self.vocab_size:0>4}",
-                    f"LEN{self.max_len:0>4}",
-                    f"POP{self.n_agent_pairs:0>4}",
-                    f"PRIOR{self.prior_type}",
-                    beta_scheduler_info,
-                    f"BASELINE{self.baseline_type}",
-                    f"NORM{self.reward_normalization_type}",
-                    f"GS{self.gumbel_softmax_mode}",
-                    f"SCELL{self.sender_cell_type}",
-                    f"RCELL{self.receiver_cell_type}",
-                    f"SEED{self.random_seed:0>4}",
-                ]
-            )
+            if self.gumbel_softmax_mode:
+                self.experiment_version = "_".join(
+                    [
+                        f"FEATURE{self.n_features:0>4}",
+                        f"VOC{self.vocab_size:0>4}",
+                        f"LEN{self.max_len:0>4}",
+                        f"POP{self.n_agent_pairs:0>4}",
+                        f"PRIOR{self.prior_type}",
+                        beta_scheduler_info,
+                        f"GS{self.gumbel_softmax_mode}",
+                        f"SCELL{self.sender_cell_type}",
+                        f"RCELL{self.receiver_cell_type}",
+                        f"SEED{self.random_seed:0>4}",
+                    ]
+                )
+            else:
+                self.experiment_version = "_".join(
+                    [
+                        f"FEATURE{self.n_features:0>4}",
+                        f"VOC{self.vocab_size:0>4}",
+                        f"LEN{self.max_len:0>4}",
+                        f"POP{self.n_agent_pairs:0>4}",
+                        f"PRIOR{self.prior_type}",
+                        beta_scheduler_info,
+                        f"GS{self.gumbel_softmax_mode}",
+                        f"BASELINE{self.baseline_type}",
+                        f"NORM{self.reward_normalization_type}",
+                        f"SCELL{self.sender_cell_type}",
+                        f"RCELL{self.receiver_cell_type}",
+                        f"SEED{self.random_seed:0>4}",
+                    ]
+                )
 
         super().process_args()
 
