@@ -46,6 +46,8 @@ class ArgumentParser(CommonArgumentParser):
                     f"PRIOR{self.prior_type}",
                     beta_scheduler_info,
                     f"BASELINE{self.baseline_type}",
+                    f"NORM{self.reward_normalization_type}",
+                    f"GS{self.gumbel_softmax_mode}",
                     f"SCELL{self.sender_cell_type}",
                     f"RCELL{self.receiver_cell_type}",
                     f"SEED{self.random_seed:0>4}",
