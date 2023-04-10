@@ -89,7 +89,7 @@ class DumpLanguage(Callback):
                                 {
                                     self.make_common_json_key_name(
                                         "meaning",
-                                        step=trainer.global_step,
+                                        step=pl_module.batch_step,
                                     ): meanings,
                                 },
                             ),
@@ -114,12 +114,12 @@ class DumpLanguage(Callback):
                             {
                                 self.make_common_json_key_name(
                                     "message",
-                                    step=trainer.global_step,
+                                    step=pl_module.batch_step,
                                     sender_idx=sender_idx,
                                 ): messages[sender_idx],
                                 self.make_common_json_key_name(
                                     "message_length",
-                                    step=trainer.global_step,
+                                    step=pl_module.batch_step,
                                     sender_idx=0,
                                 ): message_lengths[sender_idx],
                             },
