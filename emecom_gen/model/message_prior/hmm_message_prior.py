@@ -33,6 +33,7 @@ class HiddenMarkovMessagePrior(MessagePriorBase):
         message_length: Tensor,
     ):
         batch_size, total_length = message.shape
+        device = message.device
 
         init_state_log_distr = self.init_hidden_state_weight.log_softmax(dim=-1)
         transition_log_distr = self.transition_weight.log_softmax(dim=-1)
@@ -57,12 +58,13 @@ class HiddenMarkovMessagePrior(MessagePriorBase):
                 + transition_log_distr.reshape(1, self.n_hidden_states, self.n_hidden_states)
             ).logsumexp(dim=-2)
 
-        total_log_alpha = torch.stack(list(step_to_log_alpha.values()), dim=1)
-        last_log_alpha = total_log_alpha[torch.arange(batch_size), message_length - 1]
+        message_log_probs = (
+            torch.stack(list(step_to_log_alpha.values()), dim=1)
+            .logsumexp(dim=-1)
+            .diff(prepend=torch.zeros(size=(batch_size, 1), device=device))
+        )
 
-        log_likelihood = last_log_alpha.logsumexp(dim=-1)
-
-        return MessagePriorOutput(message_log_likelihood=log_likelihood)
+        return MessagePriorOutput(message_log_probs=message_log_probs)
 
     def sample_sequence(self):
         state = int(Categorical(logits=self.init_hidden_state_weight).sample().item())
