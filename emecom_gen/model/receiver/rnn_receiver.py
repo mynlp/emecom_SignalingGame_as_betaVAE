@@ -1,4 +1,4 @@
-from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell
+from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm
 from torch import Tensor
 from typing import Callable, Literal, Optional
 import torch
@@ -20,6 +20,8 @@ class RnnReceiverBase(ReceiverBase):
         self.hidden_size = hidden_size
         self.embedding_dim = embedding_dim
         self.vocab_size = vocab_size
+
+        self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
@@ -62,6 +64,7 @@ class RnnReceiverBase(ReceiverBase):
             else:
                 next_h = self.cell.forward(embedded_message[:, step], h)
             h = not_ended * next_h + (1 - not_ended) * h
+            h = self.layer_norm.forward(h)
 
         return ReceiverOutput(logits=self._compute_logits_from_hidden_state(h, candidates))
 
