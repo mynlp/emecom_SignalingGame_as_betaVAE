@@ -27,16 +27,27 @@ class ArgumentParser(CommonArgumentParser):
 
     def process_args(self) -> None:
         if self.experiment_version == "":
+            beta_scheduler_info = f"BETA{self.beta_scheduler_type}"
+
+            match self.beta_scheduler_type:
+                case "constant":
+                    beta_scheduler_info += f"V{self.beta_constant_value}"
+                case "sigmoid":
+                    beta_scheduler_info += f"G{self.beta_sigmoid_gain}O{self.beta_sigmoid_offset}"
+                case "acc-based":
+                    beta_scheduler_info += f"E{self.beta_accbased_exponent}S{self.beta_accbased_smoothing_factor}"
+
             self.experiment_version = "_".join(
                 [
-                    f"feature{self.n_features:0>4}",
-                    f"voc{self.vocab_size:0>4}",
-                    f"len{self.max_len:0>4}",
-                    f"pop{self.n_agent_pairs:0>4}",
-                    f"prior{self.prior_type}",
-                    f"scell{self.sender_cell_type}",
-                    f"rcell{self.receiver_cell_type}",
-                    f"seed{self.random_seed:0>4}",
+                    f"FEATURE{self.n_features:0>4}",
+                    f"VOC{self.vocab_size:0>4}",
+                    f"LEN{self.max_len:0>4}",
+                    f"POP{self.n_agent_pairs:0>4}",
+                    f"PRIOR{self.prior_type}",
+                    beta_scheduler_info,
+                    f"SCELL{self.sender_cell_type}",
+                    f"RCELL{self.receiver_cell_type}",
+                    f"SEED{self.random_seed:0>4}",
                 ]
             )
 
@@ -122,7 +133,9 @@ def main():
         case "sigmoid":
             beta_scheduler = SigmoidBetaScheduler(args.beta_sigmoid_gain, args.beta_sigmoid_offset)
         case "acc-based":
-            beta_scheduler = AccuracyBasedBetaScheduler()
+            beta_scheduler = AccuracyBasedBetaScheduler(
+                args.beta_accbased_exponent, args.beta_accbased_smoothing_factor
+            )
 
     model = EnsembleBetaVAEGame(
         senders=senders,
