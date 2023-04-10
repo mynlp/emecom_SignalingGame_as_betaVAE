@@ -11,7 +11,7 @@ from ...metrics import DumpLanguage
 from ...model.sender import RnnReinforceSender
 from ...model.receiver import RnnReconstructiveReceiver
 from ...model.message_prior import UniformMessagePrior, LengthExponentialMessagePrior, HiddenMarkovMessagePrior
-from ...model.game import EnsembleBetaVAEGame, ConstantBetaScheduler, SigmoidBetaScheduler
+from ...model.game import EnsembleBetaVAEGame, ConstantBetaScheduler, SigmoidBetaScheduler, AccuracyBasedBetaScheduler
 from ..common_argparser import CommonArgumentParser
 
 
@@ -120,6 +120,8 @@ def main():
             beta_scheduler = ConstantBetaScheduler(args.beta_constant_value)
         case "sigmoid":
             beta_scheduler = SigmoidBetaScheduler(args.beta_sigmoid_gain, args.beta_sigmoid_offset)
+        case "acc-based":
+            beta_scheduler = AccuracyBasedBetaScheduler()
 
     model = EnsembleBetaVAEGame(
         senders=senders,
@@ -168,6 +170,7 @@ def main():
         devices=args.devices,
         max_epochs=args.n_epochs,
         check_val_every_n_epoch=args.check_val_every_n_epoch,
+        enable_progress_bar=False,
     )
 
     logger.info("Start fitting.")
