@@ -61,6 +61,8 @@ class CommonArgumentParser(Tap):
     accelerator: Literal["cpu", "gpu"] = "gpu"
     devices: int = 1
 
+    enable_progress_bar: bool = False
+
     def process_args(self) -> None:
         if self.experiment_version == "":
             self.experiment_version = "_".join(

@@ -211,7 +211,7 @@ def main():
         devices=args.devices,
         max_epochs=args.n_epochs,
         check_val_every_n_epoch=args.check_val_every_n_epoch,
-        enable_progress_bar=False,
+        enable_progress_bar=args.enable_progress_bar,
     )
 
     torch.set_float32_matmul_precision("high")
