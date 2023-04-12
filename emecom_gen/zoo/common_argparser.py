@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional, Any
 from tap import Tap
 from pathlib import Path
 from logzero import logger
@@ -76,3 +76,19 @@ class CommonArgumentParser(Tap):
             datetime_info = "date" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             logger.info(f"Append `{datetime_info}` to `experiment_version`.")
             self.experiment_version = "_".join([self.experiment_version, datetime_info])
+
+    def __init__(
+        self,
+        *args: Any,
+        underscores_to_dashes: bool = False,
+        explicit_bool: bool = True,
+        config_files: Optional[list[str]] = None,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            *args,
+            underscores_to_dashes=underscores_to_dashes,
+            explicit_bool=explicit_bool,
+            config_files=config_files,
+            **kwargs,
+        )
