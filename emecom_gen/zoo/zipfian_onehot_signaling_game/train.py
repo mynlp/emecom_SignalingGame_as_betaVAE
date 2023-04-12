@@ -23,6 +23,8 @@ class ArgumentParser(CommonArgumentParser):
     max_len: int = 30
     vocab_size: int = 40
     fix_message_length: bool = False
+    receiver_consumes_eos: bool = False
+
     experiment_name: str = "zipfian-onehot-signaling-game"  # Name of sub-directory of `save_dir`.
 
     def process_args(self) -> None:
@@ -119,6 +121,7 @@ def main():
             cell_type=args.receiver_cell_type,
             embedding_dim=args.receiver_embedding_dim,
             hidden_size=args.receiver_hidden_size,
+            drop_last_n_symbols=int(not args.fix_message_length and not args.receiver_consumes_eos),
         )
         for _ in range(args.n_agent_pairs)
     ]
