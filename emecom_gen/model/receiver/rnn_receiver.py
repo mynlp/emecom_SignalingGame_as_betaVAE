@@ -65,8 +65,8 @@ class RnnReceiverBase(ReceiverBase):
                 c = not_ended * next_c + (1 - not_ended) * c
             else:
                 next_h = self.cell.forward(embedded_message[:, step], h)
+            next_h = self.layer_norm.forward(next_h)
             h = not_ended * next_h + (1 - not_ended) * h
-            h = self.layer_norm.forward(h)
 
         return ReceiverOutput(logits=self._compute_logits_from_hidden_state(h, candidates))
 
