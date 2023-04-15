@@ -68,6 +68,7 @@ class ArgumentParser(CommonArgumentParser):
                         f"NORM{self.reward_normalization_type}",
                         f"SCELL{self.sender_cell_type}",
                         f"RCELL{self.receiver_cell_type}",
+                        f"RIMPA{self.receiver_impatience}",
                         f"SEED{self.random_seed:0>4}",
                     ]
                 )
