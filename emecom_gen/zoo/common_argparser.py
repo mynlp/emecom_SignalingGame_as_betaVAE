@@ -23,6 +23,7 @@ class CommonArgumentParser(Tap):
     receiver_embedding_dim: int = 100  # Embedding dim.
     receiver_hidden_size: int = 128  # Hidden size.
     receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # RNN cell type.
+    receiver_impatience: bool = False
 
     sender_update_prob: float = 1
     receiver_update_prob: float = 1

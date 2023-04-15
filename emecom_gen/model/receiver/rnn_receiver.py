@@ -55,11 +55,14 @@ class RnnReceiverBase(ReceiverBase):
 
         embedded_message = self.symbol_embedding.forward(message)
 
+        logits_list: list[Tensor] = []
+
         h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
         c = torch.zeros_like(h)
 
         for step in range(int(message_length.max().item()) - self.drop_last_n_symbols):
             not_ended = (step + self.drop_last_n_symbols < message_length).unsqueeze(1).float()
+
             if isinstance(self.cell, LSTMCell):
                 next_h, next_c = self.cell.forward(embedded_message[:, step], (h, c))
                 c = not_ended * next_c + (1 - not_ended) * c
@@ -68,7 +71,12 @@ class RnnReceiverBase(ReceiverBase):
             next_h = self.layer_norm.forward(next_h)
             h = not_ended * next_h + (1 - not_ended) * h
 
-        return ReceiverOutput(logits=self._compute_logits_from_hidden_state(h, candidates))
+            logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
+
+        all_logits = torch.stack(logits_list, dim=1)
+        last_logits = all_logits[torch.arange(batch_size), message_length - 1]
+
+        return ReceiverOutput(last_logits=last_logits, all_logits=all_logits)
 
     def forward_gumbel_softmax(
         self,

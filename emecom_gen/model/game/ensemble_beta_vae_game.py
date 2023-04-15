@@ -32,6 +32,7 @@ class EnsembleBetaVAEGame(GameBase):
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
         gumbel_softmax_mode: bool = False,
+        receiver_impatience: bool = False,
     ) -> None:
         super().__init__(
             lr=lr,
@@ -48,6 +49,7 @@ class EnsembleBetaVAEGame(GameBase):
         self.sender_update_prob = sender_update_prob
         self.receiver_update_prob = receiver_update_prob
         self.prior_update_prob = prior_update_prob
+        self.receiver_impatience = receiver_impatience
 
         self.senders = list(senders)
         self.receivers = list(receivers)
@@ -85,23 +87,28 @@ class EnsembleBetaVAEGame(GameBase):
             message_length=output_s.message_length,
         )
 
-        matching_count = (output_r.logits.argmax(dim=-1) == batch.target_label).long()
+        matching_count = (output_r.last_logits.argmax(dim=-1) == batch.target_label).long()
         while len(matching_count.shape) > 1:
             matching_count = matching_count.sum(dim=-1)
         acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
 
-        communication_loss = self.cross_entropy_loss.forward(
-            input=output_r.logits.permute(0, -1, *tuple(range(1, len(output_r.logits.shape) - 1))),
-            target=batch.target_label,
-        )
-        while len(communication_loss.shape) > 1:
-            communication_loss = communication_loss.sum(dim=-1)
-
         mask = output_s.message_mask
         beta = self.beta_scheduler.forward(self.batch_step, acc=acc)
 
+        communication_loss = self.cross_entropy_loss.forward(
+            input=output_r.all_logits.permute(0, -1, *tuple(range(1, len(output_r.all_logits.shape) - 1))),
+            target=batch.target_label.unsqueeze(1).expand(
+                batch.target_label.shape[0], output_r.all_logits.shape[1], *batch.target_label.shape[1:]
+            ),
+        )
+        while len(communication_loss.shape) > 2:
+            communication_loss = communication_loss.sum(dim=-1)
+        communication_loss = communication_loss * mask
+
+        last_communication_loss = communication_loss[torch.arange(batch.batch_size), output_s.message_length - 1]
+
         negative_returns = (
-            communication_loss.detach().unsqueeze(-1)
+            last_communication_loss.detach().unsqueeze(-1)
             + (
                 inversed_cumsum(
                     (output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask,
@@ -149,7 +156,7 @@ class EnsembleBetaVAEGame(GameBase):
         )
 
         surrogate_loss = (
-            communication_loss * update_receiver
+            (communication_loss.sum(dim=-1) if self.receiver_impatience else last_communication_loss) * update_receiver
             - (output_p.message_log_probs * mask).sum(dim=-1) * update_prior * beta / len(self.senders)
             + (negative_advantages.detach() * output_s.message_log_probs * mask).sum(dim=-1) * update_sender
             + negative_advantages.pow(2).sum(dim=-1) * update_sender

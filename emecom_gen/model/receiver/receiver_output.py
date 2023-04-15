@@ -4,7 +4,8 @@ from torch import Tensor
 
 @dataclasses.dataclass(frozen=True)
 class ReceiverOutput:
-    logits: Tensor
+    last_logits: Tensor
+    all_logits: Tensor
 
 
 @dataclasses.dataclass(frozen=True)
