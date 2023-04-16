@@ -121,7 +121,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         match self.baseline_type:
             case "batch-mean":
-                baseline = negative_returns.mean(dim=0, keepdim=True).detach()
+                baseline = negative_returns.detach().sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
             case "critic-in-sender":
                 baseline = inversed_cumsum(output_s.estimated_value * mask, dim=-1)
 
@@ -164,7 +164,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         return GameOutput(
             loss=surrogate_loss,
-            communication_loss=communication_loss,
+            communication_loss=last_communication_loss,
             acc=acc,
             sender_output=output_s,
             receiver_output=output_r,
