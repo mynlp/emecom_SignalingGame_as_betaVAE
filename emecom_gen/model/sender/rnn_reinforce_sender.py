@@ -4,10 +4,10 @@ from torch.nn import (
     GRUCell,
     LSTMCell,
     Embedding,
-    Parameter,
     Linear,
     LayerNorm,
 )
+from torch.nn.parameter import Parameter
 from torch.distributions import RelaxedOneHotCategorical
 from torch.distributions import Categorical
 from typing import Callable, Literal
@@ -45,6 +45,7 @@ class RnnReinforceSender(SenderBase):
         fix_message_length: bool,
         gs_temperature: float = 1,
         gs_straight_through: bool = True,
+        enable_layer_norm: bool = True,
     ) -> None:
         super().__init__()
 
@@ -64,7 +65,11 @@ class RnnReinforceSender(SenderBase):
         self.bos_embedding = Parameter(torch.zeros(embedding_dim))
         self.hidden_to_output = Linear(hidden_size, vocab_size)
         self.value_estimator = ValueEstimator(hidden_size)
-        self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+
+        if enable_layer_norm:
+            self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+        else:
+            self.layer_norm = None
 
         self.reset_parameters()
 
@@ -95,7 +100,8 @@ class RnnReinforceSender(SenderBase):
             else:
                 h = self.cell.forward(e, h)
 
-            h = self.layer_norm.forward(h)
+            if self.layer_norm is not None:
+                h = self.layer_norm.forward(h)
 
             step_logits = self.hidden_to_output.forward(h)
             step_estimated_value = self.value_estimator.forward(h)

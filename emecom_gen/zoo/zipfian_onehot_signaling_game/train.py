@@ -46,10 +46,17 @@ class ArgumentParser(CommonArgumentParser):
                 training_method_info += f"BASELINE{self.baseline_type}{delimiter}NORM{self.reward_normalization_type}"
 
             sender_architecture_info = (
-                f"SCELL{self.sender_cell_type}H{self.sender_hidden_size}E{self.sender_embedding_dim}"
+                f"SCELL{self.sender_cell_type}"
+                f"H{self.sender_hidden_size}"
+                f"E{self.sender_embedding_dim}"
+                f"LN{self.sender_layer_norm}"
             )
             receiver_architecture_info = (
-                f"RCELL{self.receiver_cell_type}H{self.receiver_hidden_size}E{self.receiver_embedding_dim}"
+                f"RCELL{self.receiver_cell_type}"
+                f"H{self.receiver_hidden_size}"
+                f"E{self.receiver_embedding_dim}"
+                f"LN{self.receiver_layer_norm}"
+                f"IMPA{self.receiver_impatience}"
             )
 
             self.experiment_version = delimiter.join(
@@ -102,6 +109,7 @@ def main():
             embedding_dim=args.sender_embedding_dim,
             hidden_size=args.sender_hidden_size,
             fix_message_length=False,
+            enable_layer_norm=args.sender_layer_norm,
         )
         for _ in range(args.n_agent_pairs)
     ]
@@ -116,6 +124,7 @@ def main():
             cell_type=args.receiver_cell_type,
             embedding_dim=args.receiver_embedding_dim,
             hidden_size=args.receiver_hidden_size,
+            enable_layer_norm=args.receiver_layer_norm,
         )
         for _ in range(args.n_agent_pairs)
     ]

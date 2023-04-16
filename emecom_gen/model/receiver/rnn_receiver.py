@@ -14,6 +14,7 @@ class RnnReceiverBase(ReceiverBase):
         cell_type: Literal["rnn", "gru", "lstm"],
         embedding_dim: int,
         hidden_size: int,
+        enable_layer_norm: bool = False,
     ) -> None:
         super().__init__()
 
@@ -21,7 +22,10 @@ class RnnReceiverBase(ReceiverBase):
         self.embedding_dim = embedding_dim
         self.vocab_size = vocab_size
 
-        self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+        if enable_layer_norm:
+            self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+        else:
+            self.layer_norm = None
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
@@ -66,7 +70,10 @@ class RnnReceiverBase(ReceiverBase):
                 c = not_ended * next_c + (1 - not_ended) * c
             else:
                 next_h = self.cell.forward(embedded_message[:, step], h)
-            next_h = self.layer_norm.forward(next_h)
+
+            if self.layer_norm is not None:
+                next_h = self.layer_norm.forward(next_h)
+
             h = not_ended * next_h + (1 - not_ended) * h
 
             logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
@@ -110,12 +117,14 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         cell_type: Literal["rnn", "gru", "lstm"],
         embedding_dim: int,
         hidden_size: int,
+        enable_layer_norm: bool = False,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
             cell_type=cell_type,
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
+            enable_layer_norm=enable_layer_norm,
         )
 
         self.object_decoder = object_decoder
@@ -136,12 +145,14 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         cell_type: Literal["rnn", "gru", "lstm"],
         embedding_dim: int,
         hidden_size: int,
+        enable_layer_norm: bool = False,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
             cell_type=cell_type,
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
+            enable_layer_norm=enable_layer_norm,
         )
 
         self.object_encoder = object_encoder
