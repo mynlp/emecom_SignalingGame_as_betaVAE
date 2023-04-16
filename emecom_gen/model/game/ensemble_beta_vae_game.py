@@ -121,7 +121,9 @@ class EnsembleBetaVAEGame(GameBase):
 
         match self.baseline_type:
             case "batch-mean":
-                baseline = negative_returns.detach().sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
+                baseline = negative_returns.detach().sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True).clamp(
+                    min=1e-8
+                )
             case "critic-in-sender":
                 baseline = inversed_cumsum(output_s.estimated_value * mask, dim=-1)
 
