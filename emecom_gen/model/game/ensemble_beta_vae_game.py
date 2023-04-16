@@ -103,7 +103,7 @@ class EnsembleBetaVAEGame(GameBase):
         )
         while len(communication_loss.shape) > 2:
             communication_loss = communication_loss.sum(dim=-1)
-        communication_loss = communication_loss * mask
+        communication_loss = communication_loss * mask[:, : communication_loss.shape[1]]
 
         last_communication_loss = communication_loss[torch.arange(batch.batch_size), output_s.message_length - 1]
 
