@@ -23,7 +23,7 @@ class ArgumentParser(CommonArgumentParser):
     max_len: int = 30
     vocab_size: int = 40
     fix_message_length: bool = False
-    receiver_consumes_eos: bool = False
+    receiver_consumes_eos: bool = True
 
     experiment_name: str = "zipfian-onehot-signaling-game"  # Name of sub-directory of `save_dir`.
 
