@@ -1,5 +1,4 @@
 from torch import Tensor
-from torch.distributions.categorical import Categorical
 import torch
 import torch.nn.functional as F
 import dataclasses
@@ -27,11 +26,15 @@ class SenderOutput:
 
     @property
     def entropies(self) -> Tensor:
-        return Categorical(logits=self.logits).entropy()
+        return (self.logits.softmax(dim=-1) * self.logits.log_softmax(dim=-1)).sum(dim=-1).neg() * self.message_mask
 
     @property
     def normalized_entropies(self) -> Tensor:
         return self.entropies / torch.as_tensor(self.logits.shape[-1], device=self.logits.device).log()
+
+    @property
+    def message_entropy(self) -> Tensor:
+        return self.entropies.sum(dim=-1)
 
     @property
     def message_length(self) -> Tensor:
@@ -73,7 +76,11 @@ class SenderOutputGumbelSoftmax:
 
     @property
     def entropies(self) -> Tensor:
-        return Categorical(logits=self.logits).entropy()
+        return (self.logits.softmax(dim=-1) * self.logits.log_softmax(dim=-1)).sum(dim=-1).neg()
+
+    @property
+    def message_entropy(self) -> Tensor:
+        return self.entropies.sum(dim=-1)
 
     @property
     def normalized_entropies(self) -> Tensor:

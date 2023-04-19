@@ -18,14 +18,16 @@ class GameOutput:
         prefix: str = "",
         suffix: str = "",
     ):
-        return {
-            prefix + "surrogate_loss" + suffix: self.loss.detach().mean(),
-            prefix + "communication_loss" + suffix: self.communication_loss.detach().mean(),
-            prefix + "acc" + suffix: self.acc.detach().mean(),
-            prefix + "message_length" + suffix: self.sender_output.message_length.detach().float().mean(),
-            prefix + "entropy" + suffix: self.sender_output.entropies.detach().mean(),
-            prefix + "normalized_entropy" + suffix: self.sender_output.normalized_entropies.detach().mean(),
+        log_dict = {
+            "surrogate_loss": self.loss,
+            "communication_loss": self.communication_loss,
+            "acc": self.acc,
+            "message_length": self.sender_output.message_length,
+            "message_entropy": self.sender_output.message_entropy,
+            "entropy": self.sender_output.entropies,
+            "normalized_entropy": self.sender_output.normalized_entropies,
         }
+        return {prefix + k + suffix: v.detach().float().mean() for k, v in log_dict.items()}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -41,10 +43,11 @@ class GameOutputGumbelSoftmax:
         prefix: str = "",
         suffix: str = "",
     ):
-        return {
-            prefix + "surrogate_loss" + suffix: self.loss.detach().mean(),
-            prefix + "communication_loss" + suffix: self.communication_loss.detach().mean(),
-            prefix + "acc" + suffix: self.acc.detach().mean(),
-            prefix + "entropy" + suffix: self.sender_output.entropies.detach().mean(),
-            prefix + "normalized_entropy" + suffix: self.sender_output.normalized_entropies.detach().mean(),
+        log_dict = {
+            "surrogate_loss": self.loss,
+            "communication_loss": self.communication_loss,
+            "acc": self.acc,
+            "entropy": self.sender_output.entropies,
+            "normalized_entropy": self.sender_output.normalized_entropies,
         }
+        return {prefix + k + suffix: v.detach().float().mean() for k, v in log_dict.items()}
