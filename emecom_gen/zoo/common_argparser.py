@@ -36,7 +36,7 @@ class CommonArgumentParser(Tap):
     num_workers: int = 4  # Number of workers of data loader.
     lr: float = 1e-4  # Learning rate.
 
-    baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean"
+    baseline_type: Literal["batch-mean", "baselind-from-sender"] = "batch-mean"
     reward_normalization_type: Literal["none", "std"] = "none"
 
     beta_scheduler_type: Literal["constant", "sigmoid", "acc-based"] = "constant"

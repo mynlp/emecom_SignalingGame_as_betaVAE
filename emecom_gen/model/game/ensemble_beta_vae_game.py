@@ -25,7 +25,7 @@ class EnsembleBetaVAEGame(GameBase):
         lr: float = 0.0001,
         weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
-        baseline_type: Literal["batch-mean", "critic-in-sender"] = "batch-mean",
+        baseline_type: Literal["batch-mean", "baseline-from-sender"] = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
         sender_update_prob: float = 1,
@@ -44,7 +44,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta_scheduler = beta_scheduler
-        self.baseline_type: Literal["batch-mean", "critic-in-sender"] = baseline_type
+        self.baseline_type: Literal["batch-mean", "baseline-from-sender"] = baseline_type
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
         self.sender_update_prob = sender_update_prob
         self.receiver_update_prob = receiver_update_prob
@@ -124,7 +124,7 @@ class EnsembleBetaVAEGame(GameBase):
                 baseline = negative_returns.detach().sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True).clamp(
                     min=1e-8
                 )
-            case "critic-in-sender":
+            case "baseline-from-sender":
                 baseline = inversed_cumsum(output_s.estimated_value * mask, dim=-1)
 
         match self.reward_normalization_type:
