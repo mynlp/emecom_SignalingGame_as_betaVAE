@@ -184,6 +184,7 @@ def main():
         baseline_type=baseline_type,
         reward_normalization_type=args.reward_normalization_type,
         optimizer_class=args.optimizer_class,
+        num_warmup_steps=args.num_warmup_steps,
         sender_update_prob=args.sender_update_prob,
         receiver_update_prob=args.receiver_update_prob,
         prior_update_prob=args.prior_update_prob,

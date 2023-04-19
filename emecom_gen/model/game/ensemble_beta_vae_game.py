@@ -29,6 +29,7 @@ class EnsembleBetaVAEGame(GameBase):
         baseline_type: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
+        num_warmup_steps: int = 100,
         sender_update_prob: float = 1,
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
@@ -38,6 +39,7 @@ class EnsembleBetaVAEGame(GameBase):
         super().__init__(
             lr=lr,
             optimizer_class=optimizer_class,
+            num_warmup_steps=num_warmup_steps,
             weight_decay=weight_decay,
             gumbel_softmax_mode=gumbel_softmax_mode,
         )

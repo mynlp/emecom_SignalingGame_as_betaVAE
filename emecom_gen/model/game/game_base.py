@@ -2,6 +2,8 @@ from pytorch_lightning import LightningModule
 from typing import Any, Optional, Literal
 from torch.nn import Parameter
 from torch.optim import Adam, SGD
+from torch.optim.lr_scheduler import LambdaLR
+from transformers import get_constant_schedule_with_warmup
 import torch
 import itertools
 
@@ -21,11 +23,13 @@ class GameBase(LightningModule):
         self,
         lr: float,
         optimizer_class: Literal["adam", "sgd"],
+        num_warmup_steps: int = 100,
         weight_decay: float = 0,
         gumbel_softmax_mode: bool = False,
     ) -> None:
         super().__init__()
         self.lr = lr
+        self.num_warmup_steps = num_warmup_steps
         self.weight_decay = weight_decay
         self.gumbel_softmax_mode = gumbel_softmax_mode
         self.automatic_optimization = False
@@ -62,36 +66,46 @@ class GameBase(LightningModule):
         batch: Batch,
         batch_idx: int,
     ) -> None:
-        sender_index = int(torch.randint(low=0, high=len(self.senders), size=()).item())
-        receiver_index = int(torch.randint(low=0, high=len(self.receivers), size=()).item())
+        index_s = int(torch.randint(low=0, high=len(self.senders), size=()).item())
+        index_r = int(torch.randint(low=0, high=len(self.receivers), size=()).item())
 
         if self.gumbel_softmax_mode:
             game_output = self.forward_gumbel_softmax(
                 batch,
-                sender_index=sender_index,
-                receiver_index=receiver_index,
+                sender_index=index_s,
+                receiver_index=index_r,
             )
         else:
             game_output = self.forward(
                 batch,
-                sender_index=sender_index,
-                receiver_index=receiver_index,
+                sender_index=index_s,
+                receiver_index=index_r,
             )
 
         optimizers: list[Adam | SGD] = self.optimizers()
-        sender_optimizer = optimizers[sender_index]
-        receiver_optimizer = optimizers[len(self.senders) + receiver_index]
-        prior_optimizer = optimizers[-1]
+        schedulers: list[LambdaLR] = self.lr_schedulers()
 
-        sender_optimizer.zero_grad()
-        receiver_optimizer.zero_grad()
-        prior_optimizer.zero_grad()
+        optimizer_s = optimizers[index_s]
+        optimizer_r = optimizers[index_r + len(self.senders)]
+        optimizer_p = optimizers[-1]
+
+        scheduler_s = schedulers[index_s]
+        scheduler_r = schedulers[index_r + len(self.senders)]
+        scheduler_p = schedulers[-1]
+
+        optimizer_s.zero_grad()
+        optimizer_r.zero_grad()
+        optimizer_p.zero_grad()
 
         self.manual_backward(game_output.loss.mean())
 
-        sender_optimizer.step()
-        receiver_optimizer.step()
-        prior_optimizer.step()
+        optimizer_s.step()
+        optimizer_r.step()
+        optimizer_p.step()
+
+        scheduler_s.step()
+        scheduler_r.step()
+        scheduler_p.step()
 
         self.log_dict(
             game_output.make_log_dict(
@@ -134,14 +148,17 @@ class GameBase(LightningModule):
                 )
         torch.cuda.synchronize()
 
-    def configure_optimizers(self) -> list[Adam | SGD]:
+    def configure_optimizers(self) -> tuple[list[Adam | SGD], list[LambdaLR]]:
         optimizers: list[Adam | SGD] = []
+        schedulers: list[LambdaLR] = []
 
+        dummy_param = Parameter(data=torch.zeros(size=(0,)))
         for x in self.senders + self.receivers + [self.prior]:
             if len(list(x.parameters())) == 0:
-                dummy_parameter = Parameter(data=torch.zeros(size=(0,)))
-                optimizers.append(self.optimizer_class([dummy_parameter], lr=self.lr, weight_decay=self.weight_decay))
+                optimizer = self.optimizer_class([dummy_param], lr=self.lr, weight_decay=self.weight_decay)
             else:
-                optimizers.append(self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay))
+                optimizer = self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            optimizers.append(optimizer)
+            schedulers.append(get_constant_schedule_with_warmup(optimizer, num_warmup_steps=self.num_warmup_steps))
 
-        return optimizers
+        return optimizers, schedulers

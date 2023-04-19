@@ -47,6 +47,7 @@ class CommonArgumentParser(Tap):
     beta_accbased_smoothing_factor: float = 0.1
 
     optimizer_class: Literal["adam", "sgd"] = "adam"
+    num_warmup_steps: int = 100
     weight_decay: float = 0
 
     gumbel_softmax_mode: bool = False
