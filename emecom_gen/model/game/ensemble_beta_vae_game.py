@@ -78,14 +78,9 @@ class EnsembleBetaVAEGame(GameBase):
 
         output_s = sender.forward(batch)
         output_r = receiver.forward(
-            message=output_s.message,
-            message_length=output_s.message_length,
-            candidates=batch.candidates,
+            message=output_s.message, message_length=output_s.message_length, candidates=batch.candidates
         )
-        output_p = self.prior.forward(
-            message=output_s.message,
-            message_length=output_s.message_length,
-        )
+        output_p = self.prior.forward(message=output_s.message, message_length=output_s.message_length)
 
         matching_count = (output_r.last_logits.argmax(dim=-1) == batch.target_label).long()
         while len(matching_count.shape) > 1:
@@ -103,66 +98,40 @@ class EnsembleBetaVAEGame(GameBase):
         )
         while len(communication_loss.shape) > 2:
             communication_loss = communication_loss.sum(dim=-1)
-        communication_loss = communication_loss * mask[:, : communication_loss.shape[1]]
 
         last_communication_loss = communication_loss[torch.arange(batch.batch_size), output_s.message_length - 1]
 
-        negative_returns = (
-            last_communication_loss.detach().unsqueeze(-1)
-            + (
-                inversed_cumsum(
-                    (output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask,
-                    dim=-1,
-                )
-            )
-            * beta
-            / len(self.senders)
-        ) * mask
-
+        loss_s = last_communication_loss.detach() + (
+            (output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask
+        ).sum(dim=-1) * beta / len(self.senders)
         match self.baseline_type:
             case "batch-mean":
-                baseline = negative_returns.detach().sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True).clamp(
-                    min=1e-8
-                )
+                baseline = loss_s.mean()
             case "baseline-from-sender":
-                baseline = inversed_cumsum(output_s.estimated_value * mask, dim=-1)
-
+                baseline = (output_s.estimated_value * mask).sum(dim=-1)
         match self.reward_normalization_type:
             case "none":
                 denominator = 1
             case "std":
-                denominator = negative_returns.std(dim=0, unbiased=False, keepdim=True).clamp(min=1e-8).detach()
+                denominator = loss_s.std(unbiased=False).clamp(min=1e-8)
+        loss_s = (loss_s - baseline) / denominator
+        loss_r = (
+            (communication_loss * mask[:, : communication_loss.shape[1]]).sum(dim=-1)
+            if self.receiver_impatience
+            else last_communication_loss
+        )
+        loss_p = (output_p.message_log_probs * mask).sum(dim=-1) * beta / len(self.senders)
 
-        negative_advantages = (negative_returns.detach() - baseline) / denominator
-
-        update_sender = torch.bernoulli(
-            torch.as_tensor(
-                self.sender_update_prob,
-                dtype=torch.float,
-                device=self.device,
-            )
-        )
-        update_receiver = torch.bernoulli(
-            torch.as_tensor(
-                self.receiver_update_prob,
-                dtype=torch.float,
-                device=self.device,
-            )
-        )
-        update_prior = torch.bernoulli(
-            torch.as_tensor(
-                self.prior_update_prob,
-                dtype=torch.float,
-                device=self.device,
-            )
-        )
+        update_s = torch.bernoulli(torch.as_tensor(self.sender_update_prob, dtype=torch.float, device=self.device))
+        update_r = torch.bernoulli(torch.as_tensor(self.receiver_update_prob, dtype=torch.float, device=self.device))
+        update_p = torch.bernoulli(torch.as_tensor(self.prior_update_prob, dtype=torch.float, device=self.device))
 
         surrogate_loss = (
-            (communication_loss.sum(dim=-1) if self.receiver_impatience else last_communication_loss) * update_receiver
-            - (output_p.message_log_probs * mask).sum(dim=-1) * update_prior * beta / len(self.senders)
-            + (negative_advantages.detach() * output_s.message_log_probs * mask).sum(dim=-1) * update_sender
-            + negative_advantages.pow(2).sum(dim=-1) * update_sender
-        ).mean()
+            loss_r * update_r
+            + loss_p * update_p
+            + loss_s.detach() * (output_s.message_log_probs * mask).sum(dim=-1) * update_s
+            + loss_s.pow(2) * update_s
+        )
 
         return GameOutput(
             loss=surrogate_loss,
