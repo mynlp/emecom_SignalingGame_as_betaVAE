@@ -12,7 +12,13 @@ from ...metrics import DumpLanguage
 from ...model.sender import RnnReinforceSender
 from ...model.receiver import RnnReconstructiveReceiver
 from ...model.message_prior import UniformMessagePrior, LengthExponentialMessagePrior, HiddenMarkovMessagePrior
-from ...model.game import EnsembleBetaVAEGame, ConstantBetaScheduler, SigmoidBetaScheduler, AccuracyBasedBetaScheduler
+from ...model.game import (
+    EnsembleBetaVAEGame,
+    ConstantBetaScheduler,
+    SigmoidBetaScheduler,
+    AccuracyBasedBetaScheduler,
+    InputDependentBaseline,
+)
 from ..common_argparser import CommonArgumentParser
 
 
@@ -162,6 +168,12 @@ def main():
                 args.beta_accbased_exponent, args.beta_accbased_smoothing_factor
             )
 
+    match args.baseline_type:
+        case "input-dependent":
+            baseline_type = InputDependentBaseline(args.n_features)
+        case literal:
+            baseline_type = literal
+
     model = EnsembleBetaVAEGame(
         senders=senders,
         receivers=receivers,
@@ -169,7 +181,7 @@ def main():
         lr=args.lr,
         weight_decay=args.weight_decay,
         beta_scheduler=beta_scheduler,
-        baseline_type=args.baseline_type,
+        baseline_type=baseline_type,
         reward_normalization_type=args.reward_normalization_type,
         optimizer_class=args.optimizer_class,
         sender_update_prob=args.sender_update_prob,

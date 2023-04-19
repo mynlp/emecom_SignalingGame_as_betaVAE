@@ -9,6 +9,7 @@ from ..receiver import ReceiverBase
 from ..message_prior import MessagePriorBase
 from .game_output import GameOutput, GameOutputGumbelSoftmax
 from .game_base import GameBase
+from .baseline import InputDependentBaseline
 from .beta_scheduler import BetaSchedulerBase, ConstantBetaScheduler
 
 
@@ -25,7 +26,7 @@ class EnsembleBetaVAEGame(GameBase):
         lr: float = 0.0001,
         weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
-        baseline_type: Literal["batch-mean", "baseline-from-sender"] = "batch-mean",
+        baseline_type: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
         sender_update_prob: float = 1,
@@ -44,7 +45,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta_scheduler = beta_scheduler
-        self.baseline_type: Literal["batch-mean", "baseline-from-sender"] = baseline_type
+        self.baseline_type: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline = baseline_type
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
         self.sender_update_prob = sender_update_prob
         self.receiver_update_prob = receiver_update_prob
@@ -109,6 +110,9 @@ class EnsembleBetaVAEGame(GameBase):
                 baseline = loss_s.mean()
             case "baseline-from-sender":
                 baseline = (output_s.estimated_value * mask).sum(dim=-1)
+            case b:
+                assert isinstance(b, InputDependentBaseline)
+                baseline = b.forward(batch.input)
         match self.reward_normalization_type:
             case "none":
                 denominator = 1
