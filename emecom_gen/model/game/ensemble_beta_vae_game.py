@@ -126,7 +126,7 @@ class EnsembleBetaVAEGame(GameBase):
             if self.receiver_impatience
             else last_communication_loss
         )
-        loss_p = (output_p.message_log_probs * mask).sum(dim=-1) * beta / len(self.senders)
+        loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta / len(self.senders)
 
         update_s = torch.bernoulli(torch.as_tensor(self.sender_update_prob, dtype=torch.float, device=self.device))
         update_r = torch.bernoulli(torch.as_tensor(self.receiver_update_prob, dtype=torch.float, device=self.device))
