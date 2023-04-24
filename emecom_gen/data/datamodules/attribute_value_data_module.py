@@ -52,6 +52,7 @@ class AttributeValueDataModule(LightningDataModule):
         n_attributes: int,
         n_values: int,
         batch_size: int,
+        num_batches_per_epoch: int,
         heldout_ratio: float = 0,
         random_seed: Optional[int] = None,
         num_workers: int = 4,
@@ -66,6 +67,7 @@ class AttributeValueDataModule(LightningDataModule):
         self.n_values = n_values
 
         self.batch_size = batch_size
+        self.num_batches_per_epoch = num_batches_per_epoch
         self.num_workers = num_workers
 
         self.generator = None if random_seed is None else Generator().manual_seed(random_seed)
@@ -96,7 +98,7 @@ class AttributeValueDataModule(LightningDataModule):
         sampler = RandomSampler(
             data_source=self.train_dataset,
             replacement=True,
-            num_samples=self.batch_size,
+            num_samples=self.batch_size * self.num_batches_per_epoch,
             generator=self.generator,
         )
         return DataLoader(

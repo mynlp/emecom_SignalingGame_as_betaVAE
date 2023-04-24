@@ -99,6 +99,7 @@ def main():
         random_seed=args.random_seed,
         num_workers=args.num_workers,
         exponent=args.exponent,
+        num_batches_per_epoch=args.accumulate_grad_batches,
     )
 
     logger.info("Creat Model")
@@ -190,6 +191,7 @@ def main():
         prior_update_prob=args.prior_update_prob,
         gumbel_softmax_mode=args.gumbel_softmax_mode,
         receiver_impatience=args.receiver_impatience,
+        accumulate_grad_batches=args.accumulate_grad_batches,
     )
 
     logger.info("Create a trainer")

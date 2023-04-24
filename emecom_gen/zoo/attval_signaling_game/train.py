@@ -93,6 +93,7 @@ def main():
         n_attributes=args.n_attributes,
         n_values=args.n_values,
         batch_size=args.batch_size,
+        num_batches_per_epoch=args.accumulate_grad_batches,
         random_seed=args.random_seed,
         num_workers=args.num_workers,
         heldout_ratio=args.heldout_ratio,
@@ -191,6 +192,7 @@ def main():
         receiver_update_prob=args.receiver_update_prob,
         prior_update_prob=args.prior_update_prob,
         gumbel_softmax_mode=args.gumbel_softmax_mode,
+        accumulate_grad_batches=args.accumulate_grad_batches,
     )
 
     logger.info("Create a trainer")

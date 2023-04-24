@@ -26,12 +26,14 @@ class GameBase(LightningModule):
         num_warmup_steps: int = 100,
         weight_decay: float = 0,
         gumbel_softmax_mode: bool = False,
+        accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__()
         self.lr = lr
         self.num_warmup_steps = num_warmup_steps
         self.weight_decay = weight_decay
         self.gumbel_softmax_mode = gumbel_softmax_mode
+        self.accumulate_grad_batches = accumulate_grad_batches
         self.automatic_optimization = False
 
         self.batch_step = 0
@@ -93,26 +95,38 @@ class GameBase(LightningModule):
         scheduler_r = schedulers[index_r + len(self.senders)]
         scheduler_p = schedulers[-1]
 
-        optimizer_s.zero_grad()
-        optimizer_r.zero_grad()
-        optimizer_p.zero_grad()
+        batch_idx_modulo_accumulation = batch_idx % self.accumulate_grad_batches
+
+        if batch_idx_modulo_accumulation == 0:
+            accumulation_start_step = True
+        else:
+            accumulation_start_step = False
+
+        if batch_idx_modulo_accumulation == self.accumulate_grad_batches - 1:
+            accumulation_end_step = True
+        else:
+            accumulation_end_step = False
+
+        if accumulation_start_step:
+            optimizer_s.zero_grad()
+            optimizer_r.zero_grad()
+            optimizer_p.zero_grad()
 
         self.manual_backward(game_output.loss.mean())
 
-        optimizer_s.step()
-        optimizer_r.step()
-        optimizer_p.step()
-
-        scheduler_s.step()
-        scheduler_r.step()
-        scheduler_p.step()
-
-        self.log_dict(
-            game_output.make_log_dict(
-                prefix="train_",
-            ),
-            batch_size=batch.batch_size,
-        )
+        if accumulation_end_step:
+            optimizer_s.step()
+            optimizer_r.step()
+            optimizer_p.step()
+            scheduler_s.step()
+            scheduler_r.step()
+            scheduler_p.step()
+            self.log_dict(
+                game_output.make_log_dict(
+                    prefix="train_",
+                ),
+                batch_size=batch.batch_size,
+            )
 
     def on_train_batch_end(
         self,
@@ -120,7 +134,8 @@ class GameBase(LightningModule):
         batch: Any,
         batch_idx: int,
     ) -> None:
-        self.batch_step += 1
+        if batch_idx % self.accumulate_grad_batches == self.accumulate_grad_batches - 1:
+            self.batch_step += 1
 
     def validation_step(
         self,

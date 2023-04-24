@@ -35,6 +35,7 @@ class EnsembleBetaVAEGame(GameBase):
         prior_update_prob: float = 1,
         gumbel_softmax_mode: bool = False,
         receiver_impatience: bool = False,
+        accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__(
             lr=lr,
@@ -42,6 +43,7 @@ class EnsembleBetaVAEGame(GameBase):
             num_warmup_steps=num_warmup_steps,
             weight_decay=weight_decay,
             gumbel_softmax_mode=gumbel_softmax_mode,
+            accumulate_grad_batches=accumulate_grad_batches,
         )
         assert len(senders) == len(receivers)
 

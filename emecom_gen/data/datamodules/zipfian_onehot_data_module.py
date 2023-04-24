@@ -43,6 +43,7 @@ class ZipfianOneHotDataModule(LightningDataModule):
         self,
         n_features: int,
         batch_size: int,
+        num_batches_per_epoch: int,
         random_seed: Optional[int] = None,
         num_workers: int = 4,
         exponent: float = -1,
@@ -56,6 +57,7 @@ class ZipfianOneHotDataModule(LightningDataModule):
         self.weights = [(rank + 1) ** exponent for rank in range(n_features)]
 
         self.batch_size = batch_size
+        self.num_batches_per_epoch = num_batches_per_epoch
         self.num_workers = num_workers
         self.generator = None if random_seed is None else Generator().manual_seed(random_seed)
 
@@ -71,7 +73,7 @@ class ZipfianOneHotDataModule(LightningDataModule):
         sampler = WeightedRandomSampler(
             weights=self.weights,
             replacement=True,
-            num_samples=self.batch_size,
+            num_samples=self.batch_size * self.num_batches_per_epoch,
             generator=self.generator,
         )
         return DataLoader(
