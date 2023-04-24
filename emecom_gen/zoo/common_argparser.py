@@ -16,12 +16,12 @@ class CommonArgumentParser(Tap):
     max_len: int = 2  # Maximum length of message.
     fix_message_length: bool = True  # Wether to fix message length.
 
-    sender_embedding_dim: int = 100  # Embedding dim.
+    sender_embedding_dim: int = 10  # Embedding dim.
     sender_hidden_size: int = 512  # Hidden size.
     sender_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # RNN cell type.
     sender_layer_norm: bool = True
 
-    receiver_embedding_dim: int = 100  # Embedding dim.
+    receiver_embedding_dim: int = 10  # Embedding dim.
     receiver_hidden_size: int = 128  # Hidden size.
     receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # RNN cell type.
     receiver_impatience: bool = False
