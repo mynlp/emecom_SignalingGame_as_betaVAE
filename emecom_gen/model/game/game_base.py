@@ -122,9 +122,7 @@ class GameBase(LightningModule):
             scheduler_r.step()
             scheduler_p.step()
             self.log_dict(
-                game_output.make_log_dict(
-                    prefix="train_",
-                ),
+                game_output.make_log_dict(prefix="train_"),
                 batch_size=batch.batch_size,
             )
 
