@@ -112,7 +112,7 @@ class GameBase(LightningModule):
             optimizer_r.zero_grad()
             optimizer_p.zero_grad()
 
-        self.manual_backward(game_output.loss.mean())
+        self.manual_backward(game_output.loss.mean() / self.accumulate_grad_batches)
 
         if accumulation_end_step:
             optimizer_s.step()
