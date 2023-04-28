@@ -60,7 +60,7 @@ class TopographicSimilarity(Callback):
                 message_distances = [
                     editdistance.eval(
                         messages[i][: None if message_lengths is None else message_lengths[i]],
-                        messages[j][: None if message_lengths is None else message_lengths[i]],
+                        messages[j][: None if message_lengths is None else message_lengths[j]],
                     )
                     for i in range(len(messages))
                     for j in range(i + 1, len(messages))
