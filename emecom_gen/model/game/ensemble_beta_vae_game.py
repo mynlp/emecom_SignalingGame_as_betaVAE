@@ -116,7 +116,7 @@ class EnsembleBetaVAEGame(GameBase):
                 baseline = (output_s.estimated_value * mask).sum(dim=-1)
             case b:
                 assert isinstance(b, InputDependentBaseline)
-                baseline = b.forward(batch.input)
+                baseline = b.forward(batch.input, sender_idx=sender_index, receiver_idx=receiver_index)
         match self.reward_normalization_type:
             case "none":
                 denominator = 1
