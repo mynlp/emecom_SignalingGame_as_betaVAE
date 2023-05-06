@@ -173,7 +173,11 @@ def main():
 
     match args.baseline_type:
         case "input-dependent":
-            baseline_type = InputDependentBaseline(args.n_attributes * args.n_values)
+            baseline_type = InputDependentBaseline(
+                args.n_attributes * args.n_values,
+                num_senders=args.n_agent_pairs,
+                num_receivers=args.n_agent_pairs,
+            )
         case literal:
             baseline_type = literal
 
