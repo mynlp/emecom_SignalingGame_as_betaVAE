@@ -10,7 +10,7 @@ class CommonArgumentParser(Tap):
 
     prior_type: Literal["uniform", "length-exponential", "hmm"] = "uniform"
     length_exponential_prior_base: float = 1
-    hmm_prior_num_hidden_states: int = 10
+    hmm_prior_num_hidden_states: int = 36
 
     vocab_size: int = 32  # Vocabulary size of message.
     max_len: int = 2  # Maximum length of message.
@@ -47,7 +47,7 @@ class CommonArgumentParser(Tap):
     beta_accbased_smoothing_factor: float = 0.1
 
     optimizer_class: Literal["adam", "sgd"] = "adam"
-    num_warmup_steps: int = 100
+    num_warmup_steps: int = 0
     weight_decay: float = 0
 
     gumbel_softmax_mode: bool = False
