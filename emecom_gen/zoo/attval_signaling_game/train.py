@@ -173,13 +173,13 @@ def main():
 
     match args.baseline_type:
         case "input-dependent":
-            baseline_type = InputDependentBaseline(
+            baseline = InputDependentBaseline(
                 args.n_attributes * args.n_values,
                 num_senders=args.n_agent_pairs,
                 num_receivers=args.n_agent_pairs,
             )
         case literal:
-            baseline_type = literal
+            baseline = literal
 
     model = EnsembleBetaVAEGame(
         senders=senders,
@@ -188,7 +188,7 @@ def main():
         lr=args.lr,
         weight_decay=args.weight_decay,
         beta_scheduler=beta_scheduler,
-        baseline_type=baseline_type,
+        baseline=baseline,
         reward_normalization_type=args.reward_normalization_type,
         optimizer_class=args.optimizer_class,
         num_warmup_steps=args.num_warmup_steps,

@@ -26,7 +26,7 @@ class EnsembleBetaVAEGame(GameBase):
         lr: float = 0.0001,
         weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
-        baseline_type: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline = "batch-mean",
+        baseline: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
         num_warmup_steps: int = 100,
@@ -39,6 +39,10 @@ class EnsembleBetaVAEGame(GameBase):
     ) -> None:
         super().__init__(
             lr=lr,
+            senders=senders,
+            receivers=receivers,
+            prior=message_prior,
+            baseline=baseline,
             optimizer_class=optimizer_class,
             num_warmup_steps=num_warmup_steps,
             weight_decay=weight_decay,
@@ -49,23 +53,11 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta_scheduler = beta_scheduler
-        self.baseline_type: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline = baseline_type
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
         self.sender_update_prob = sender_update_prob
         self.receiver_update_prob = receiver_update_prob
         self.prior_update_prob = prior_update_prob
         self.receiver_impatience = receiver_impatience
-
-        self.senders = list(senders)
-        self.receivers = list(receivers)
-        self.prior = message_prior
-
-        # Type-hinting of nn.Module is not well-supported.
-        # Instead, we add modules directly.
-        for i, sender in enumerate(senders):
-            self.add_module(f"{sender.__class__.__name__}[{i}]", sender)
-        for i, receiver in enumerate(receivers):
-            self.add_module(f"{receiver.__class__.__name__}[{i}]", receiver)
 
     def forward(
         self,
@@ -109,7 +101,7 @@ class EnsembleBetaVAEGame(GameBase):
         loss_s = last_communication_loss.detach() + (
             (output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask
         ).sum(dim=-1) * beta / len(self.senders)
-        match self.baseline_type:
+        match self.baseline:
             case "batch-mean":
                 baseline = loss_s.mean()
             case "baseline-from-sender":

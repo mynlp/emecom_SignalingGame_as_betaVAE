@@ -1,6 +1,6 @@
 from pytorch_lightning import LightningModule
-from typing import Any, Optional, Literal
-from torch.nn import Parameter
+from typing import Any, Optional, Literal, Sequence
+from torch.nn import Parameter, Module
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import get_constant_schedule_with_warmup
@@ -11,6 +11,7 @@ from ...data.batch import Batch
 from ..sender import SenderBase
 from ..receiver import ReceiverBase
 from ..message_prior import MessagePriorBase
+from .baseline import InputDependentBaseline
 from .game_output import GameOutput, GameOutputGumbelSoftmax
 
 
@@ -18,18 +19,25 @@ class GameBase(LightningModule):
     senders: list[SenderBase]
     receivers: list[ReceiverBase]
     prior: MessagePriorBase
+    baseline: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline
 
     def __init__(
         self,
+        *,
+        senders: Sequence[SenderBase],
+        receivers: Sequence[ReceiverBase],
+        prior: MessagePriorBase,
         lr: float,
         optimizer_class: Literal["adam", "sgd"],
-        num_warmup_steps: int = 100,
+        baseline: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline,
+        num_warmup_steps: int = 0,
         weight_decay: float = 0,
         gumbel_softmax_mode: bool = False,
         accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__()
         self.lr = lr
+        self.baseline = baseline
         self.num_warmup_steps = num_warmup_steps
         self.weight_decay = weight_decay
         self.gumbel_softmax_mode = gumbel_softmax_mode
@@ -43,6 +51,17 @@ class GameBase(LightningModule):
                 self.optimizer_class = Adam
             case "sgd":
                 self.optimizer_class = SGD
+
+        self.senders = list(senders)
+        self.receivers = list(receivers)
+        self.prior = prior
+
+        # Type-hinting of nn.Module is not well-supported.
+        # Instead, we add modules directly.
+        for i, sender in enumerate(senders):
+            self.add_module(f"{sender.__class__.__name__}[{i}]", sender)
+        for i, receiver in enumerate(receivers):
+            self.add_module(f"{receiver.__class__.__name__}[{i}]", receiver)
 
     def __call__(self, batch: Batch) -> GameOutput:
         return self.forward(batch)
@@ -89,11 +108,13 @@ class GameBase(LightningModule):
 
         optimizer_s = optimizers[index_s]
         optimizer_r = optimizers[index_r + len(self.senders)]
-        optimizer_p = optimizers[-1]
+        optimizer_p = optimizers[-2]
+        optimizer_b = optimizers[-1]
 
         scheduler_s = schedulers[index_s]
         scheduler_r = schedulers[index_r + len(self.senders)]
-        scheduler_p = schedulers[-1]
+        scheduler_p = schedulers[-2]
+        scheduler_b = optimizers[-1]
 
         batch_idx_modulo_accumulation = batch_idx % self.accumulate_grad_batches
 
@@ -111,6 +132,7 @@ class GameBase(LightningModule):
             optimizer_s.zero_grad()
             optimizer_r.zero_grad()
             optimizer_p.zero_grad()
+            optimizer_b.zero_grad()
 
         self.manual_backward(game_output.loss.mean() / self.accumulate_grad_batches)
 
@@ -118,9 +140,11 @@ class GameBase(LightningModule):
             optimizer_s.step()
             optimizer_r.step()
             optimizer_p.step()
+            optimizer_b.step()
             scheduler_s.step()
             scheduler_r.step()
             scheduler_p.step()
+            scheduler_b.step()
             self.log_dict(
                 game_output.make_log_dict(prefix="train_"),
                 batch_size=batch.batch_size,
@@ -171,6 +195,15 @@ class GameBase(LightningModule):
                 optimizer = self.optimizer_class([dummy_param], lr=self.lr, weight_decay=self.weight_decay)
             else:
                 optimizer = self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            optimizers.append(optimizer)
+            schedulers.append(get_constant_schedule_with_warmup(optimizer, num_warmup_steps=self.num_warmup_steps))
+
+        if isinstance(self.baseline, Module):
+            optimizer = self.optimizer_class(self.baseline.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            optimizers.append(optimizer)
+            schedulers.append(get_constant_schedule_with_warmup(optimizer, num_warmup_steps=self.num_warmup_steps))
+        else:
+            optimizer = self.optimizer_class([dummy_param], lr=self.lr, weight_decay=self.weight_decay)
             optimizers.append(optimizer)
             schedulers.append(get_constant_schedule_with_warmup(optimizer, num_warmup_steps=self.num_warmup_steps))
 
