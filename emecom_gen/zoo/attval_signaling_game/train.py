@@ -28,6 +28,7 @@ class ArgumentParser(CommonArgumentParser):
     experiment_name: str = "attribute-value-signaling-game"  # Name of sub-directory of `save_dir`.
     compute_topsim: bool = False
     compute_speakers_synchronization: bool = False
+    compute_harris_based_metrics: bool = False
 
     def process_args(self) -> None:
         if self.experiment_version == "":
@@ -208,8 +209,6 @@ def main():
             dirpath=args.save_dir / args.experiment_name / args.experiment_version,
             every_n_epochs=args.save_checkpoint_every,
         ),
-        TopographicSimilarity(),
-        HarrisSchemeBasedMetrics(),
         DumpLanguage(
             save_dir=args.save_dir / args.experiment_name / args.experiment_version,
             meaning_type="target_label",
@@ -221,6 +220,9 @@ def main():
 
     if args.compute_speakers_synchronization:
         callbacks.append(SpeakersSynchronization())
+
+    if args.compute_harris_based_metrics:
+        callbacks.append(HarrisSchemeBasedMetrics())
 
     trainer = Trainer(
         logger=[
