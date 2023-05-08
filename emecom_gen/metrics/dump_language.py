@@ -37,9 +37,6 @@ class DumpLanguage(Callback):
         step: int | Literal["last"] = "last",
         sender_idx: int = 0,
     ):
-        if step == "last":
-            step = -1
-
         match key_type:
             case "meaning":
                 return "meaning"
@@ -48,20 +45,15 @@ class DumpLanguage(Callback):
             case _:
                 raise ValueError(f"Unknown key_type {key_type}.")
 
-    def on_validation_epoch_end(
+    def dump(
         self,
-        trainer: Trainer,
-        pl_module: GameBase,
+        game: GameBase,
+        dataloaders: list[DataLoader[Batch]],
+        step: int | Literal["last"] = "last",
     ) -> None:
-        assert not pl_module.training
+        assert not game.training
 
-        dataloaders: Optional[list[DataLoader[Batch]]] = trainer.val_dataloaders
-        if dataloaders is None:
-            return
         for dataloader_idx, dataloader in enumerate(dataloaders):
-            if len(dataloader) == 0:
-                continue
-
             if not self.meaning_saved_flag:
                 self.meaning_saved_flag = True
 
@@ -81,18 +73,9 @@ class DumpLanguage(Callback):
                                 meanings.append(batch.input_data_path)
                             else:
                                 meanings.extend(batch.input_data_path)
-                        case unknown:
-                            raise ValueError(f"Unkown meaning type `{unknown}`.")
                     with self.make_common_save_file_path(self.save_dir, dataloader_idx).open("w") as f:
                         print(
-                            json.dumps(
-                                {
-                                    self.make_common_json_key_name(
-                                        "meaning",
-                                        step=pl_module.batch_step,
-                                    ): meanings,
-                                },
-                            ),
+                            json.dumps({self.make_common_json_key_name("meaning", step=step): meanings}),
                             file=f,
                         )
 
@@ -100,9 +83,9 @@ class DumpLanguage(Callback):
             message_lengths: defaultdict[int, list[int]] = defaultdict(list)
 
             for batch in dataloader:
-                batch: Batch = batch.to(pl_module.device)
+                batch: Batch = batch.to(game.device)
 
-                for sender_idx, sender in list(enumerate(pl_module.senders)):
+                for sender_idx, sender in list(enumerate(game.senders)):
                     sender_output = sender.forward(batch)
                     messages[sender_idx].extend((sender_output.message * sender_output.message_mask.long()).tolist())
                     message_lengths[sender_idx].extend(sender_output.message_length.tolist())
@@ -112,17 +95,37 @@ class DumpLanguage(Callback):
                     print(
                         json.dumps(
                             {
+                                self.make_common_json_key_name("message", step=step, sender_idx=sender_idx): messages[
+                                    sender_idx
+                                ],
                                 self.make_common_json_key_name(
-                                    "message",
-                                    step=pl_module.batch_step,
-                                    sender_idx=sender_idx,
-                                ): messages[sender_idx],
-                                self.make_common_json_key_name(
-                                    "message_length",
-                                    step=pl_module.batch_step,
-                                    sender_idx=sender_idx,
+                                    "message_length", step=step, sender_idx=sender_idx
                                 ): message_lengths[sender_idx],
-                            },
+                            }
                         ),
                         file=f,
                     )
+
+    def on_validation_epoch_end(
+        self,
+        trainer: Trainer,
+        pl_module: GameBase,
+    ) -> None:
+        dataloaders: Optional[list[DataLoader[Batch]]] = trainer.val_dataloaders
+
+        if dataloaders is None:
+            return
+
+        self.dump(game=pl_module, dataloaders=dataloaders, step=pl_module.batch_step)
+
+    def on_fit_end(
+        self,
+        trainer: Trainer,
+        pl_module: GameBase,
+    ) -> None:
+        dataloaders: Optional[list[DataLoader[Batch]]] = trainer.val_dataloaders
+
+        if dataloaders is None:
+            return
+
+        self.dump(game=pl_module, dataloaders=dataloaders, step="last")

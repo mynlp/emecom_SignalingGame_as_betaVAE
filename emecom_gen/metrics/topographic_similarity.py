@@ -133,3 +133,10 @@ class TopographicSimilarity(Callback):
                 },
                 add_dataloader_idx=False,
             )
+
+    def on_fit_end(
+        self,
+        trainer: Trainer,
+        pl_module: GameBase,
+    ) -> None:
+        return self.on_validation_epoch_end(trainer, pl_module)
