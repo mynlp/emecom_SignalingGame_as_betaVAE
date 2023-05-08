@@ -185,6 +185,32 @@ class GameBase(LightningModule):
                 )
         torch.cuda.synchronize()
 
+    def test_step(
+        self,
+        batch: Batch,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        streams: dict[tuple[int, int], torch.cuda.Stream] = {
+            k: torch.cuda.Stream() for k in itertools.product(range(len(self.senders)), range(len(self.receivers)))
+        }
+        torch.cuda.synchronize()
+        for (sender_idx, receiver_idx), stream in streams.items():
+            with torch.cuda.stream(stream):
+                game_output = self.forward(
+                    batch,
+                    sender_index=sender_idx,
+                    receiver_index=receiver_idx,
+                )
+                self.log_dict(
+                    game_output.make_log_dict(
+                        prefix="test_",
+                        suffix=f"/sender_idx_{sender_idx}/receiver_idx_{receiver_idx}",
+                    ),
+                    batch_size=batch.batch_size,
+                )
+        torch.cuda.synchronize()
+
     def configure_optimizers(self) -> tuple[list[Adam | SGD], list[LambdaLR]]:
         optimizers: list[Adam | SGD] = []
         schedulers: list[LambdaLR] = []

@@ -237,6 +237,8 @@ def main():
 
     torch.set_float32_matmul_precision("high")
     trainer.fit(model=model, datamodule=datamodule)
+    if args.heldout_ratio > 0:
+        trainer.test(model=model, datamodule=datamodule)
 
 
 if __name__ == "__main__":

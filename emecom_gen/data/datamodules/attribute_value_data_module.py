@@ -109,24 +109,21 @@ class AttributeValueDataModule(LightningDataModule):
             sampler=sampler,
         )
 
-    def val_dataloader(self) -> list[DataLoader[Batch]]:
-        return [
-            DataLoader(
-                dataset=self.train_dataset,
-                batch_size=self.batch_size,
-                num_workers=self.num_workers,
-                collate_fn=Batch.collate_fn,
-            ),
-            DataLoader(
-                dataset=self.heldout_dataset,
-                batch_size=self.batch_size,
-                num_workers=self.num_workers,
-                collate_fn=Batch.collate_fn,
-            ),
-        ]
+    def val_dataloader(self) -> DataLoader[Batch]:
+        return DataLoader(
+            dataset=self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            collate_fn=Batch.collate_fn,
+        )
 
-    def test_dataloader(self) -> NoReturn:
-        raise NotImplementedError()
+    def test_dataloader(self) -> DataLoader[Batch]:
+        return DataLoader(
+            dataset=self.heldout_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            collate_fn=Batch.collate_fn,
+        )
 
     def predict_dataloader(self) -> NoReturn:
         raise NotImplementedError()
