@@ -120,7 +120,7 @@ class DumpLanguage(Callback):
                                 self.make_common_json_key_name(
                                     "message_length",
                                     step=pl_module.batch_step,
-                                    sender_idx=0,
+                                    sender_idx=sender_idx,
                                 ): message_lengths[sender_idx],
                             },
                         ),
