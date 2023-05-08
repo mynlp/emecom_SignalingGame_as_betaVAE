@@ -17,7 +17,7 @@ from ...model.game import (
     AccuracyBasedBetaScheduler,
     InputDependentBaseline,
 )
-from ...metrics import TopographicSimilarity, DumpLanguage, HarrisSchemeBasedMetrics
+from ...metrics import TopographicSimilarity, DumpLanguage, HarrisSchemeBasedMetrics, SpeakersSynchronization
 from ..common_argparser import CommonArgumentParser
 from .additional_archs import AttributeValueEncoder, AttributeValueDecoder
 
@@ -26,6 +26,8 @@ class ArgumentParser(CommonArgumentParser):
     n_attributes: int = 2  # Number of attributes.
     n_values: int = 16  # Number of values.
     experiment_name: str = "attribute-value-signaling-game"  # Name of sub-directory of `save_dir`.
+    compute_topsim: bool = False
+    compute_speakers_synchronization: bool = False
 
     def process_args(self) -> None:
         if self.experiment_version == "":
@@ -213,6 +215,12 @@ def main():
             meaning_type="target_label",
         ),
     ]
+
+    if args.compute_topsim:
+        callbacks.append(TopographicSimilarity())
+
+    if args.compute_speakers_synchronization:
+        callbacks.append(SpeakersSynchronization())
 
     trainer = Trainer(
         logger=[
