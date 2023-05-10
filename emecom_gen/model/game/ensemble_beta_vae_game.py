@@ -142,7 +142,7 @@ class EnsembleBetaVAEGame(GameBase):
             loss_r * update_r
             + loss_p * update_p
             + (((loss_s - baseline.detach()) / denominator) * output_s.message_log_probs * mask).sum(dim=-1) * update_s
-            + ((loss_s - baseline).pow(2)).sum(dim=-1) * mask * update_s
+            + ((loss_s - baseline).pow(2) * mask).sum(dim=-1) * update_s
         )
 
         return GameOutput(
