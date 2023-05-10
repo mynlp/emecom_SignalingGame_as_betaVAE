@@ -98,23 +98,35 @@ class EnsembleBetaVAEGame(GameBase):
 
         last_communication_loss = communication_loss[torch.arange(batch.batch_size), output_s.message_length - 1]
 
-        loss_s = last_communication_loss.detach() + (
-            (output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask
-        ).sum(dim=-1) * beta / len(self.senders)
+        loss_s = (
+            last_communication_loss.detach().unsqueeze(1)
+            + inversed_cumsum((output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask, dim=1)
+            * beta
+            / len(self.senders)
+        ) * mask
+
         match self.baseline:
             case "batch-mean":
-                baseline = loss_s.mean()
+                baseline = loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
             case "baseline-from-sender":
-                baseline = (output_s.estimated_value * mask).sum(dim=-1)
+                baseline = output_s.estimated_value * mask
             case b:
                 assert isinstance(b, InputDependentBaseline)
-                baseline = b.forward(batch.input, sender_idx=sender_index, receiver_idx=receiver_index)
+                baseline = b.forward(batch.input, sender_idx=sender_index, receiver_idx=receiver_index) * mask
+
         match self.reward_normalization_type:
             case "none":
                 denominator = 1
             case "std":
-                denominator = loss_s.std(unbiased=False).clamp(min=1e-8)
-        loss_s = (loss_s - baseline) / denominator
+                denominator = (
+                    (
+                        loss_s.pow(2).sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
+                        - (loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)).pow(2)
+                    )
+                    .sqrt()
+                    .clamp(min=1e-8)
+                )
+
         loss_r = (
             (communication_loss * mask[:, : communication_loss.shape[1]]).sum(dim=-1)
             if self.receiver_impatience
@@ -129,8 +141,8 @@ class EnsembleBetaVAEGame(GameBase):
         surrogate_loss = (
             loss_r * update_r
             + loss_p * update_p
-            + ((loss_s - baseline.detach()) / denominator) * (output_s.message_log_probs * mask).sum(dim=-1) * update_s
-            + (loss_s - baseline).pow(2) * update_s
+            + (((loss_s - baseline.detach()) / denominator) * output_s.message_log_probs * mask).sum(dim=-1) * update_s
+            + ((loss_s - baseline).pow(2)).sum(dim=-1) * mask * update_s
         )
 
         return GameOutput(
