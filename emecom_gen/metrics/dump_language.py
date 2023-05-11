@@ -51,7 +51,8 @@ class DumpLanguage(Callback):
         dataloaders: list[DataLoader[Batch]],
         step: int | Literal["last"] = "last",
     ) -> None:
-        assert not game.training
+        game_training_state = game.training
+        game.eval()
 
         for dataloader_idx, dataloader in enumerate(dataloaders):
             if not self.meaning_saved_flag:
@@ -105,6 +106,8 @@ class DumpLanguage(Callback):
                         ),
                         file=f,
                     )
+
+        game.train(game_training_state)
 
     def on_validation_epoch_end(
         self,
