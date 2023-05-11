@@ -219,7 +219,8 @@ def main():
         callbacks.append(
             EarlyStopping(
                 monitor=args.early_stopping_monitor,
-                patience=1,
+                patience=0,
+                verbose=True,
                 mode=args.early_stopping_mode,
                 stopping_threshold=args.early_stopping_thr,
             )
