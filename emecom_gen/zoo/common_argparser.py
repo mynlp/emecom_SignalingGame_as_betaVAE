@@ -36,6 +36,10 @@ class CommonArgumentParser(Tap):
     num_workers: int = 4  # Number of workers of data loader.
     lr: float = 1e-4  # Learning rate.
 
+    early_stopping_monitor: Optional[str] = None
+    early_stopping_mode: Literal["min", "max"] = "max"
+    early_stopping_thr: float = 0.9
+
     baseline_type: Literal["batch-mean", "input-dependent", "baseline-from-sender"] = "batch-mean"
     reward_normalization_type: Literal["none", "std"] = "none"
 

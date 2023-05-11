@@ -1,5 +1,5 @@
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import Callback, ModelCheckpoint
+from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from logzero import logger
 import json
@@ -214,6 +214,16 @@ def main():
             meaning_type="target_label",
         ),
     ]
+
+    if args.early_stopping_monitor is not None:
+        callbacks.append(
+            EarlyStopping(
+                monitor=args.early_stopping_monitor,
+                patience=1,
+                mode=args.early_stopping_mode,
+                stopping_threshold=args.early_stopping_thr,
+            )
+        )
 
     if args.compute_topsim:
         callbacks.append(TopographicSimilarity())
