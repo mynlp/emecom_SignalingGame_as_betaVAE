@@ -109,18 +109,6 @@ class DumpLanguage(Callback):
 
         game.train(game_training_state)
 
-    def on_validation_epoch_end(
-        self,
-        trainer: Trainer,
-        pl_module: GameBase,
-    ) -> None:
-        dataloaders: Optional[list[DataLoader[Batch]]] = trainer.val_dataloaders
-
-        if dataloaders is None:
-            return
-
-        self.dump(game=pl_module, dataloaders=dataloaders, step=pl_module.batch_step)
-
     def on_fit_end(
         self,
         trainer: Trainer,
