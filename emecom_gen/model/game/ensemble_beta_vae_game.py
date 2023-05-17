@@ -111,7 +111,7 @@ class EnsembleBetaVAEGame(GameBase):
             case "baseline-from-sender":
                 baseline = inversed_cumsum(output_s.estimated_value * mask, dim=1)
             case "none":
-                baseline = 0
+                baseline = torch.as_tensor(0, dtype=torch.float, device=self.device)
             case b:
                 assert isinstance(b, InputDependentBaseline)
                 baseline = b.forward(batch.input, sender_idx=sender_index, receiver_idx=receiver_index) * mask
