@@ -39,9 +39,7 @@ class InputDependentBaseline(Module):
         batch_size = input.shape[0]
         device = input.device
 
-        baseline = self.input_to_baseline.forward(input) + self.position_to_baseline.unsqueeze(0).reshape(
-            batch_size, -1
-        )
+        baseline = self.input_to_baseline.forward(input) + self.position_to_baseline.unsqueeze(0).expand(batch_size, -1)
         if self.sender_idx_to_baseline is not None:
             baseline = baseline + self.sender_idx_to_baseline.forward(
                 torch.full(
