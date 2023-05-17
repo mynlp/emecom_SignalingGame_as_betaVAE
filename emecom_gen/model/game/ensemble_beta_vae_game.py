@@ -22,7 +22,7 @@ class EnsembleBetaVAEGame(GameBase):
         self,
         senders: Sequence[SenderBase],
         receivers: Sequence[ReceiverBase],
-        message_prior: MessagePriorBase,
+        message_prior: Literal["receiver"] | MessagePriorBase,
         lr: float = 0.0001,
         weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
@@ -77,7 +77,12 @@ class EnsembleBetaVAEGame(GameBase):
         output_r = receiver.forward(
             message=output_s.message, message_length=output_s.message_length, candidates=batch.candidates
         )
-        output_p = self.prior.forward(message=output_s.message, message_length=output_s.message_length)
+
+        match self.prior:
+            case "receiver":
+                output_p = output_r.message_prior_output
+            case p:
+                output_p = p.forward(message=output_s.message, message_length=output_s.message_length)
 
         matching_count = (output_r.last_logits.argmax(dim=-1) == batch.target_label).long()
         while len(matching_count.shape) > 1:

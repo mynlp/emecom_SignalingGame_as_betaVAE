@@ -163,6 +163,8 @@ def main():
                 n_hidden_states=args.hmm_prior_num_hidden_states,
                 n_observable_states=args.vocab_size,
             )
+        case "receiver":
+            prior = "receiver"
 
     match args.beta_scheduler_type:
         case "constant":

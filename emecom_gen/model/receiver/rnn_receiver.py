@@ -1,8 +1,11 @@
-from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm
+from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear
 from torch import Tensor
 from typing import Callable, Literal, Optional
 import torch
+from torch.nn.parameter import Parameter
+from torch.nn import functional as F
 
+from ..message_prior import MessagePriorOutput
 from .receiver_base import ReceiverBase
 from .receiver_output import ReceiverOutput, ReceiverOutputGumbelSoftmax
 
@@ -15,6 +18,7 @@ class RnnReceiverBase(ReceiverBase):
         embedding_dim: int,
         hidden_size: int,
         enable_layer_norm: bool = False,
+        enable_symbol_prediction: bool = False,
     ) -> None:
         super().__init__()
 
@@ -29,6 +33,13 @@ class RnnReceiverBase(ReceiverBase):
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
+        if enable_symbol_prediction:
+            self.symbol_predictor = Linear(hidden_size, vocab_size)
+            self.bos_embedding = Parameter(torch.zeros(vocab_size))
+        else:
+            self.symbol_predictor = None
+            self.bos_embedding = None
+
         match cell_type:
             case "rnn":
                 self.cell = RNNCell(embedding_dim, hidden_size)
@@ -36,8 +47,12 @@ class RnnReceiverBase(ReceiverBase):
                 self.cell = GRUCell(embedding_dim, hidden_size)
             case "lstm":
                 self.cell = LSTMCell(embedding_dim, hidden_size)
-            case _:
-                raise ValueError(f"Unknown cell_type {cell_type}.")
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        if self.bos_embedding is not None:
+            torch.nn.init.normal_(self.bos_embedding)
 
     def _compute_logits_from_hidden_state(
         self,
@@ -57,12 +72,22 @@ class RnnReceiverBase(ReceiverBase):
 
         embedded_message = self.symbol_embedding.forward(message)
 
+        if self.bos_embedding is not None:
+            embedded_message = torch.cat(
+                [
+                    self.bos_embedding.reshape(1, 1, self.embedding_dim).expand(batch_size, 1, self.embedding_dim),
+                    embedded_message,
+                ],
+                dim=1,
+            )
+
         logits_list: list[Tensor] = []
+        symbol_logits_list: list[Tensor] = []
 
         h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
         c = torch.zeros_like(h)
 
-        for step in range(int(message_length.max().item())):
+        for step in range(int(message_length.max().item()) + int(self.bos_embedding is not None)):
             not_ended = (step < message_length).unsqueeze(1).float()
 
             if isinstance(self.cell, LSTMCell):
@@ -78,10 +103,27 @@ class RnnReceiverBase(ReceiverBase):
 
             logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
 
+            if self.symbol_predictor is not None:
+                symbol_logits_list.append(self.symbol_predictor.forward(h))
+
         all_logits = torch.stack(logits_list, dim=1)
         last_logits = all_logits[torch.arange(batch_size), message_length - 1]
 
-        return ReceiverOutput(last_logits=last_logits, all_logits=all_logits)
+        if len(symbol_logits_list) > 0:
+            message_log_probs = F.cross_entropy(
+                input=torch.stack(symbol_logits_list, dim=2),  # (batch, vocab_size, seq_len)
+                target=message,  # (batch, seq_len)
+                reduction="none",
+            ).neg()
+            message_prior_output = MessagePriorOutput(message_log_probs)
+        else:
+            message_prior_output = None
+
+        return ReceiverOutput(
+            last_logits=last_logits,
+            all_logits=all_logits,
+            message_prior_output=message_prior_output,
+        )
 
     def forward_gumbel_softmax(
         self,

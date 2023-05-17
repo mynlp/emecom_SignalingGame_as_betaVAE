@@ -8,7 +8,7 @@ from datetime import datetime
 class CommonArgumentParser(Tap):
     n_agent_pairs: int = 1  # Number of agent pairs.
 
-    prior_type: Literal["uniform", "length-exponential", "hmm"] = "uniform"
+    prior_type: Literal["uniform", "length-exponential", "hmm", "receiver"] = "uniform"
     length_exponential_prior_base: float = 1
     hmm_prior_num_hidden_states: int = 36
 

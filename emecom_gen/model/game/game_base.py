@@ -18,7 +18,7 @@ from .game_output import GameOutput, GameOutputGumbelSoftmax
 class GameBase(LightningModule):
     senders: list[SenderBase]
     receivers: list[ReceiverBase]
-    prior: MessagePriorBase
+    prior: Literal["receiver"] | MessagePriorBase
     baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline
 
     def __init__(
@@ -26,7 +26,7 @@ class GameBase(LightningModule):
         *,
         senders: Sequence[SenderBase],
         receivers: Sequence[ReceiverBase],
-        prior: MessagePriorBase,
+        prior: Literal["receiver"] | MessagePriorBase,
         lr: float,
         optimizer_class: Literal["adam", "sgd"],
         baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline,
