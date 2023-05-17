@@ -109,7 +109,7 @@ class EnsembleBetaVAEGame(GameBase):
             case "batch-mean":
                 baseline = loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
             case "baseline-from-sender":
-                baseline = output_s.estimated_value * mask
+                baseline = inversed_cumsum(output_s.estimated_value * mask, dim=1)
             case b:
                 assert isinstance(b, InputDependentBaseline)
                 baseline = b.forward(batch.input, sender_idx=sender_index, receiver_idx=receiver_index) * mask
