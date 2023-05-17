@@ -18,11 +18,11 @@ class SenderOutput:
 
     @property
     def message_log_probs(self) -> Tensor:
-        return torch.gather(
-            F.log_softmax(self.logits, dim=-1),
-            -1,
-            self.message.unsqueeze(-1).expand(*self.message.shape, self.logits.shape[-1]),
-        ).select(-1, 0)
+        return F.cross_entropy(
+            input=self.logits.permute(0, 2, 1),
+            target=self.message,
+            reduction="none",
+        ).neg()
 
     @property
     def entropies(self) -> Tensor:
