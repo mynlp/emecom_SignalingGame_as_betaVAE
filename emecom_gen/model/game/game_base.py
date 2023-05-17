@@ -19,7 +19,7 @@ class GameBase(LightningModule):
     senders: list[SenderBase]
     receivers: list[ReceiverBase]
     prior: MessagePriorBase
-    baseline: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline
+    baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class GameBase(LightningModule):
         prior: MessagePriorBase,
         lr: float,
         optimizer_class: Literal["adam", "sgd"],
-        baseline: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline,
+        baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline,
         num_warmup_steps: int = 0,
         weight_decay: float = 0,
         gumbel_softmax_mode: bool = False,

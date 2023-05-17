@@ -26,7 +26,7 @@ class EnsembleBetaVAEGame(GameBase):
         lr: float = 0.0001,
         weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
-        baseline: Literal["batch-mean", "baseline-from-sender"] | InputDependentBaseline = "batch-mean",
+        baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
         num_warmup_steps: int = 100,
@@ -110,6 +110,8 @@ class EnsembleBetaVAEGame(GameBase):
                 baseline = loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
             case "baseline-from-sender":
                 baseline = inversed_cumsum(output_s.estimated_value * mask, dim=1)
+            case "none":
+                baseline = 0
             case b:
                 assert isinstance(b, InputDependentBaseline)
                 baseline = b.forward(batch.input, sender_idx=sender_index, receiver_idx=receiver_index) * mask

@@ -40,7 +40,7 @@ class CommonArgumentParser(Tap):
     early_stopping_mode: Literal["min", "max"] = "max"
     early_stopping_thr: float = 0.9
 
-    baseline_type: Literal["batch-mean", "input-dependent", "baseline-from-sender"] = "batch-mean"
+    baseline_type: Literal["batch-mean", "input-dependent", "baseline-from-sender", "none"] = "batch-mean"
     reward_normalization_type: Literal["none", "std"] = "none"
 
     beta_scheduler_type: Literal["constant", "sigmoid", "acc-based"] = "constant"
