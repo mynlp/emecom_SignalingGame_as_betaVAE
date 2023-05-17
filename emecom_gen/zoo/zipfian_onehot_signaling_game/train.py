@@ -171,7 +171,7 @@ def main():
 
     match args.baseline_type:
         case "input-dependent":
-            baseline = InputDependentBaseline(args.n_features)
+            baseline = InputDependentBaseline(args.n_features, args.max_len)
         case literal:
             baseline = literal
 

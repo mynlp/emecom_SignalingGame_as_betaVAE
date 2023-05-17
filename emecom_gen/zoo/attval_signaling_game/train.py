@@ -178,6 +178,7 @@ def main():
         case "input-dependent":
             baseline = InputDependentBaseline(
                 args.n_attributes * args.n_values,
+                args.max_len,
                 num_senders=args.n_agent_pairs,
                 num_receivers=args.n_agent_pairs,
             )
