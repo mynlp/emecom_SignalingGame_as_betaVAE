@@ -217,7 +217,7 @@ class GameBase(LightningModule):
 
         dummy_param = Parameter(data=torch.zeros(size=(0,)))
         for x in self.senders + self.receivers + [self.prior]:
-            if len(list(x.parameters())) == 0:
+            if not isinstance(x, Module) or len(list(x.parameters())) == 0:
                 optimizer = self.optimizer_class([dummy_param], lr=self.lr, weight_decay=self.weight_decay)
             else:
                 optimizer = self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay)
