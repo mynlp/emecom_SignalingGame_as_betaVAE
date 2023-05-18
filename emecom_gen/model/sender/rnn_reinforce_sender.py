@@ -84,7 +84,8 @@ class RnnReinforceSender(SenderBase):
         batch_size = input.shape[0]
 
         encoder_hidden_state = self.object_encoder(input)
-        encoder_hidden_state = self.layer_norm.forward(encoder_hidden_state)
+        if self.layer_norm is not None:
+            encoder_hidden_state = self.layer_norm.forward(encoder_hidden_state)
 
         h = encoder_hidden_state
         c = torch.zeros_like(h)

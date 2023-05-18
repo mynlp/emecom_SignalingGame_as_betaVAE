@@ -87,7 +87,7 @@ class RnnReceiverBase(ReceiverBase):
         h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
         c = torch.zeros_like(h)
 
-        for step in range(int(message_length.max().item()) + int(self.bos_embedding is not None)):
+        for step in range(message.shape[1] + int(self.bos_embedding is not None)):
             not_ended = (step < message_length).unsqueeze(1).float()
 
             if isinstance(self.cell, LSTMCell):
@@ -108,6 +108,8 @@ class RnnReceiverBase(ReceiverBase):
 
         all_logits = torch.stack(logits_list, dim=1)
         last_logits = all_logits[torch.arange(batch_size), message_length - 1]
+
+        symbol_logits_list.pop(-1)  # the last symbol logits is not necessary
 
         if len(symbol_logits_list) > 0:
             message_log_probs = F.cross_entropy(
