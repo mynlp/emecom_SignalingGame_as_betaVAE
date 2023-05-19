@@ -132,6 +132,7 @@ def main():
             embedding_dim=args.receiver_embedding_dim,
             hidden_size=args.receiver_hidden_size,
             enable_layer_norm=args.receiver_layer_norm,
+            enable_symbol_prediction=(args.prior_type == "receiver"),
         )
         for _ in range(args.n_agent_pairs)
     ]
@@ -158,6 +159,8 @@ def main():
                 n_hidden_states=args.hmm_prior_num_hidden_states,
                 n_observable_states=args.vocab_size,
             )
+        case "receiver":
+            prior = "receiver"
 
     match args.beta_scheduler_type:
         case "constant":
