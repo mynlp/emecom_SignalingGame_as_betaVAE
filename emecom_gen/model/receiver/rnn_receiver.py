@@ -109,9 +109,8 @@ class RnnReceiverBase(ReceiverBase):
         all_logits = torch.stack(logits_list, dim=1)
         last_logits = all_logits[torch.arange(batch_size), message_length - 1]
 
-        symbol_logits_list.pop(-1)  # the last symbol logits is not necessary
-
         if len(symbol_logits_list) > 0:
+            symbol_logits_list.pop(-1)  # the last symbol logits is not necessary
             message_log_probs = F.cross_entropy(
                 input=torch.stack(symbol_logits_list, dim=2),  # (batch, vocab_size, seq_len)
                 target=message,  # (batch, seq_len)
@@ -162,6 +161,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         embedding_dim: int,
         hidden_size: int,
         enable_layer_norm: bool = False,
+        enable_symbol_prediction: bool = False,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -169,6 +169,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
+            enable_symbol_prediction=enable_symbol_prediction,
         )
 
         self.object_decoder = object_decoder
@@ -190,6 +191,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         embedding_dim: int,
         hidden_size: int,
         enable_layer_norm: bool = False,
+        enable_symbol_prediction: bool = False,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -197,6 +199,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
+            enable_symbol_prediction=enable_symbol_prediction,
         )
 
         self.object_encoder = object_encoder
