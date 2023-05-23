@@ -117,7 +117,7 @@ class EnsembleBetaVAEGame(GameBase):
             case "batch-mean":
                 baseline = loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
             case "baseline-from-sender":
-                baseline = inversed_cumsum(output_s.estimated_value * mask, dim=1)
+                baseline = output_s.estimated_value * mask
             case "none":
                 baseline = torch.as_tensor(0, dtype=torch.float, device=self.device)
             case b:
