@@ -32,6 +32,7 @@ class GameBase(LightningModule):
         baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline,
         num_warmup_steps: int = 0,
         weight_decay: float = 0,
+        gradient_clip_val: float = 1,
         gumbel_softmax_mode: bool = False,
         accumulate_grad_batches: int = 1,
     ) -> None:
@@ -40,6 +41,7 @@ class GameBase(LightningModule):
         self.baseline = baseline
         self.num_warmup_steps = num_warmup_steps
         self.weight_decay = weight_decay
+        self.gradient_clip_val = gradient_clip_val
         self.gumbel_softmax_mode = gumbel_softmax_mode
         self.accumulate_grad_batches = accumulate_grad_batches
         self.automatic_optimization = False
@@ -137,6 +139,10 @@ class GameBase(LightningModule):
         self.manual_backward(game_output.loss.mean() / self.accumulate_grad_batches)
 
         if accumulation_end_step:
+            self.clip_gradients(optimizer_s, self.gradient_clip_val, "norm")
+            self.clip_gradients(optimizer_r, self.gradient_clip_val, "norm")
+            self.clip_gradients(optimizer_p, self.gradient_clip_val, "norm")
+            self.clip_gradients(optimizer_b, self.gradient_clip_val, "norm")
             optimizer_s.step()
             optimizer_r.step()
             optimizer_p.step()
