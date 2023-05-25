@@ -22,7 +22,7 @@ class EnsembleBetaVAEGame(GameBase):
         self,
         senders: Sequence[SenderBase],
         receivers: Sequence[ReceiverBase],
-        message_prior: Literal["receiver"] | MessagePriorBase,
+        priors: Sequence[MessagePriorBase | Literal["receiver"]],
         lr: float = 0.0001,
         weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
@@ -39,9 +39,9 @@ class EnsembleBetaVAEGame(GameBase):
     ) -> None:
         super().__init__(
             lr=lr,
-            senders=senders,
-            receivers=receivers,
-            prior=message_prior,
+            senders=list(senders),
+            receivers=list(receivers),
+            priors=list(priors),
             baseline=baseline,
             optimizer_class=optimizer_class,
             num_warmup_steps=num_warmup_steps,
@@ -72,13 +72,14 @@ class EnsembleBetaVAEGame(GameBase):
 
         sender = self.senders[sender_index]
         receiver = self.receivers[receiver_index]
+        prior = self.priors[receiver_index]
 
         output_s = sender.forward(batch)
         output_r = receiver.forward(
             message=output_s.message, message_length=output_s.message_length, candidates=batch.candidates
         )
 
-        match self.prior:
+        match prior:
             case "receiver":
                 output_p = output_r.message_prior_output
                 assert (
@@ -183,9 +184,15 @@ class EnsembleBetaVAEGame(GameBase):
             message=output_s.message,
             candidates=batch.candidates,
         )
-        output_p = self.prior.forward_gumbel_softmax(
-            message=output_s.message,
-        )
+
+        match self.priors[receiver_index]:
+            case "receiver":
+                output_p = output_r.message_prior_output
+                assert (
+                    output_p is not None
+                ), '`ReceiverOutput.message_prior_output` must not be `None` when `self.prior == "receiver"`.'
+            case p:
+                output_p = p.forward_gumbel_softmax(message=output_s.message)
 
         communication_loss = torch.as_tensor(0.0, dtype=torch.float, device=self.device)
         kl_term_loss = torch.as_tensor(0.0, dtype=torch.float, device=self.device)

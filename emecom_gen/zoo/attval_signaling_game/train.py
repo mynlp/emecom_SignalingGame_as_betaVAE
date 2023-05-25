@@ -2,6 +2,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from logzero import logger
+from typing import Sequence, Literal
 import json
 import torch
 
@@ -9,7 +10,12 @@ import torch
 from ...data import AttributeValueDataModule
 from ...model.sender import RnnReinforceSender
 from ...model.receiver import RnnReconstructiveReceiver
-from ...model.message_prior import UniformMessagePrior, LengthExponentialMessagePrior, HiddenMarkovMessagePrior
+from ...model.message_prior import (
+    MessagePriorBase,
+    UniformMessagePrior,
+    LengthExponentialMessagePrior,
+    HiddenMarkovMessagePrior,
+)
 from ...model.game import (
     EnsembleBetaVAEGame,
     ConstantBetaScheduler,
@@ -139,18 +145,25 @@ def main():
         for _ in range(args.n_agent_pairs)
     ]
 
+    priors: Sequence[MessagePriorBase | Literal["receiver"]]
     match args.prior_type:
         case "uniform":
-            prior = UniformMessagePrior(
-                vocab_size=args.vocab_size,
-                max_len=args.max_len,
-            )
+            priors = [
+                UniformMessagePrior(
+                    vocab_size=args.vocab_size,
+                    max_len=args.max_len,
+                )
+                for _ in range(args.n_agent_pairs)
+            ]
         case "length-exponential":
-            prior = LengthExponentialMessagePrior(
-                vocab_size=args.vocab_size,
-                max_len=args.max_len,
-                base=args.length_exponential_prior_base,
-            )
+            priors = [
+                LengthExponentialMessagePrior(
+                    vocab_size=args.vocab_size,
+                    max_len=args.max_len,
+                    base=args.length_exponential_prior_base,
+                )
+                for _ in range(args.n_agent_pairs)
+            ]
             if args.length_exponential_prior_base == 1:
                 logger.warning(
                     "`args.prior_type == 'length-exponential'` while `args.length_exponential_base == 1`. "
@@ -162,12 +175,15 @@ def main():
                     "It is essentially the same as `args.prior_type == uniform`."
                 )
         case "hmm":
-            prior = HiddenMarkovMessagePrior(
-                n_hidden_states=args.hmm_prior_num_hidden_states,
-                n_observable_states=args.vocab_size,
-            )
+            priors = [
+                HiddenMarkovMessagePrior(
+                    n_hidden_states=args.hmm_prior_num_hidden_states,
+                    n_observable_states=args.vocab_size,
+                )
+                for _ in range(args.n_agent_pairs)
+            ]
         case "receiver":
-            prior = "receiver"
+            priors = ["receiver" for _ in range(args.n_agent_pairs)]
 
     match args.beta_scheduler_type:
         case "constant":
@@ -193,7 +209,7 @@ def main():
     model = EnsembleBetaVAEGame(
         senders=senders,
         receivers=receivers,
-        message_prior=prior,
+        priors=priors,
         lr=args.lr,
         weight_decay=args.weight_decay,
         beta_scheduler=beta_scheduler,

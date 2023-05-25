@@ -18,15 +18,15 @@ from .game_output import GameOutput, GameOutputGumbelSoftmax
 class GameBase(LightningModule):
     senders: list[SenderBase]
     receivers: list[ReceiverBase]
-    prior: Literal["receiver"] | MessagePriorBase
+    priors: list[MessagePriorBase | Literal["receiver"]]
     baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline
 
     def __init__(
         self,
         *,
-        senders: Sequence[SenderBase],
-        receivers: Sequence[ReceiverBase],
-        prior: Literal["receiver"] | MessagePriorBase,
+        senders: list[SenderBase],
+        receivers: list[ReceiverBase],
+        priors: list[MessagePriorBase | Literal["receiver"]],
         lr: float,
         optimizer_class: Literal["adam", "sgd"],
         baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline,
@@ -37,6 +37,8 @@ class GameBase(LightningModule):
         accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__()
+        assert len(senders) == len(receivers) == len(priors)
+
         self.lr = lr
         self.baseline = baseline
         self.num_warmup_steps = num_warmup_steps
@@ -54,9 +56,9 @@ class GameBase(LightningModule):
             case "sgd":
                 self.optimizer_class = SGD
 
-        self.senders = list(senders)
-        self.receivers = list(receivers)
-        self.prior = prior
+        self.senders = senders
+        self.receivers = receivers
+        self.priors = priors
 
         # Type-hinting of nn.Module is not well-supported.
         # Instead, we add modules directly.
@@ -64,6 +66,9 @@ class GameBase(LightningModule):
             self.add_module(f"{sender.__class__.__name__}[{i}]", sender)
         for i, receiver in enumerate(receivers):
             self.add_module(f"{receiver.__class__.__name__}[{i}]", receiver)
+        for i, prior in enumerate(priors):
+            if isinstance(prior, Module):
+                self.add_module(f"{prior.__class__.__name__}[{i}]", prior)
 
     def __call__(self, batch: Batch) -> GameOutput:
         return self.forward(batch)
@@ -110,12 +115,12 @@ class GameBase(LightningModule):
 
         optimizer_s = optimizers[index_s]
         optimizer_r = optimizers[index_r + len(self.senders)]
-        optimizer_p = optimizers[-2]
+        optimizer_p = optimizers[index_r + len(self.senders) + len(self.receivers)]
         optimizer_b = optimizers[-1]
 
         scheduler_s = schedulers[index_s]
         scheduler_r = schedulers[index_r + len(self.senders)]
-        scheduler_p = schedulers[-2]
+        scheduler_p = schedulers[index_r + len(self.senders) + len(self.receivers)]
         scheduler_b = optimizers[-1]
 
         batch_idx_modulo_accumulation = batch_idx % self.accumulate_grad_batches
@@ -222,7 +227,7 @@ class GameBase(LightningModule):
         schedulers: list[LambdaLR] = []
 
         dummy_param = Parameter(data=torch.zeros(size=(0,)))
-        for x in self.senders + self.receivers + [self.prior]:
+        for x in self.senders + self.receivers + self.priors:
             if not isinstance(x, Module) or len(list(x.parameters())) == 0:
                 optimizer = self.optimizer_class([dummy_param], lr=self.lr, weight_decay=self.weight_decay)
             else:
