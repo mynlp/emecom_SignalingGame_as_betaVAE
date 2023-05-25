@@ -120,6 +120,7 @@ class RnnReinforceSender(SenderBase):
             else:
                 h = self.cell.forward(e, h)
 
+            h = h * h_dropout_mask
             h = self.layer_norm.forward(h)
 
             step_logits = self.hidden_to_output.forward(h)
@@ -133,6 +134,7 @@ class RnnReinforceSender(SenderBase):
                 symbol = step_logits.argmax(dim=-1)
 
             e = self.embedding.forward(symbol)
+            e = e * e_dropout_mask
 
             symbol_list.append(symbol)
             logits_list.append(step_logits)

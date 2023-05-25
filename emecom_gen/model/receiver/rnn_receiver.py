@@ -1,4 +1,4 @@
-from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear, Identity
+from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear, Identity, Dropout
 from torch import Tensor
 from typing import Callable, Literal, Optional
 import torch
@@ -19,6 +19,7 @@ class RnnReceiverBase(ReceiverBase):
         hidden_size: int,
         enable_layer_norm: bool = False,
         enable_symbol_prediction: bool = False,
+        dropout: float = 0,
     ) -> None:
         super().__init__()
 
@@ -30,6 +31,8 @@ class RnnReceiverBase(ReceiverBase):
             self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
         else:
             self.layer_norm = Identity()
+
+        self.dropout = Dropout(dropout)
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
@@ -72,6 +75,10 @@ class RnnReceiverBase(ReceiverBase):
 
         embedded_message = self.symbol_embedding.forward(message)
 
+        e_dropout_mask = self.dropout.forward(torch.ones_like(embedded_message[:, 0])).unsqueeze(1)
+
+        embedded_message = embedded_message * e_dropout_mask
+
         if self.bos_embedding is not None:
             embedded_message = torch.cat(
                 [
@@ -87,6 +94,8 @@ class RnnReceiverBase(ReceiverBase):
         h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
         c = torch.zeros_like(h)
 
+        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
+
         for step in range(message.shape[1] + int(self.bos_embedding is not None)):
             not_ended = (step < message_length).unsqueeze(1).float()
 
@@ -96,6 +105,7 @@ class RnnReceiverBase(ReceiverBase):
             else:
                 next_h = self.cell.forward(embedded_message[:, step], h)
 
+            next_h = next_h * h_dropout_mask
             next_h = self.layer_norm.forward(next_h)
 
             h = not_ended * next_h + (1 - not_ended) * h
@@ -184,6 +194,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         hidden_size: int,
         enable_layer_norm: bool = False,
         enable_symbol_prediction: bool = False,
+        dropout: float = 0,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -192,6 +203,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
             enable_symbol_prediction=enable_symbol_prediction,
+            dropout=dropout,
         )
 
         self.object_decoder = object_decoder
@@ -214,6 +226,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         hidden_size: int,
         enable_layer_norm: bool = False,
         enable_symbol_prediction: bool = False,
+        dropout: float = 0,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -222,6 +235,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
             enable_symbol_prediction=enable_symbol_prediction,
+            dropout=dropout,
         )
 
         self.object_encoder = object_encoder

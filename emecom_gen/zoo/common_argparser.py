@@ -35,6 +35,7 @@ class CommonArgumentParser(Tap):
     batch_size: int = 1024  # Batch size of data loader.
     num_workers: int = 4  # Number of workers of data loader.
     lr: float = 1e-4  # Learning rate.
+    dropout: float = 0  # Dropout p.
 
     early_stopping_monitor: Optional[str] = None
     early_stopping_mode: Literal["min", "max"] = "max"

@@ -123,6 +123,7 @@ def main():
             hidden_size=args.sender_hidden_size,
             fix_message_length=False,
             enable_layer_norm=args.sender_layer_norm,
+            dropout=args.dropout,
         )
         for _ in range(args.n_agent_pairs)
     ]
@@ -139,6 +140,7 @@ def main():
             hidden_size=args.receiver_hidden_size,
             enable_layer_norm=args.receiver_layer_norm,
             enable_symbol_prediction=(args.prior_type == "receiver"),
+            dropout=args.dropout,
         )
         for _ in range(args.n_agent_pairs)
     ]
