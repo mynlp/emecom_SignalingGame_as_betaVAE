@@ -2,7 +2,7 @@ import dataclasses
 from torch import Tensor
 from typing import Optional
 
-from ..message_prior import MessagePriorOutput
+from ..message_prior import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 
 
 @dataclasses.dataclass(frozen=True)
@@ -15,3 +15,4 @@ class ReceiverOutput:
 @dataclasses.dataclass(frozen=True)
 class ReceiverOutputGumbelSoftmax:
     logits: Tensor
+    message_prior_output: Optional[MessagePriorOutputGumbelSoftmax] = None

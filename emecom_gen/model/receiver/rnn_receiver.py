@@ -1,11 +1,11 @@
-from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear
+from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear, Identity
 from torch import Tensor
 from typing import Callable, Literal, Optional
 import torch
 from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 
-from ..message_prior import MessagePriorOutput
+from ..message_prior import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 from .receiver_base import ReceiverBase
 from .receiver_output import ReceiverOutput, ReceiverOutputGumbelSoftmax
 
@@ -29,7 +29,7 @@ class RnnReceiverBase(ReceiverBase):
         if enable_layer_norm:
             self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
         else:
-            self.layer_norm = None
+            self.layer_norm = Identity()
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
@@ -96,8 +96,7 @@ class RnnReceiverBase(ReceiverBase):
             else:
                 next_h = self.cell.forward(embedded_message[:, step], h)
 
-            if self.layer_norm is not None:
-                next_h = self.layer_norm.forward(next_h)
+            next_h = self.layer_norm.forward(next_h)
 
             h = not_ended * next_h + (1 - not_ended) * h
 
@@ -136,20 +135,43 @@ class RnnReceiverBase(ReceiverBase):
 
         embedded_message = torch.matmul(message, self.symbol_embedding.weight)
 
+        if self.bos_embedding is not None:
+            embedded_message = torch.cat(
+                [
+                    self.bos_embedding.reshape(1, 1, self.embedding_dim).expand(batch_size, 1, self.embedding_dim),
+                    embedded_message,
+                ],
+                dim=1,
+            )
+
         h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
         c = torch.zeros_like(h)
 
         logits_list: list[Tensor] = []
+        symbol_logits_list: list[Tensor] = []
 
         for step in range(message.shape[-2]):
             if isinstance(self.cell, LSTMCell):
                 h, c = self.cell.forward(embedded_message[:, step], (h, c))
             else:
                 h = self.cell.forward(embedded_message[:, step], h)
+            h = self.layer_norm.forward(h)
             step_logits = self._compute_logits_from_hidden_state(h, candidates)
             logits_list.append(step_logits)
+            if self.symbol_predictor is not None:
+                symbol_logits_list.append(self.symbol_predictor.forward(h))
 
-        return ReceiverOutputGumbelSoftmax(logits=torch.stack(logits_list, dim=1))
+        if len(symbol_logits_list) > 0:
+            symbol_logits_list.pop(-1)  # the last symbol logits is not necessary
+            message_log_probs = (torch.stack(symbol_logits_list, dim=1).log_softmax(dim=-1) * message).sum(dim=-1)
+            message_prior_output = MessagePriorOutputGumbelSoftmax(message_log_probs)
+        else:
+            message_prior_output = None
+
+        return ReceiverOutputGumbelSoftmax(
+            logits=torch.stack(logits_list, dim=1),
+            message_prior_output=message_prior_output,
+        )
 
 
 class RnnReconstructiveReceiver(RnnReceiverBase):
