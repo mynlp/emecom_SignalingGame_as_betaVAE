@@ -10,7 +10,7 @@ from torch.nn import (
 from torch.nn.parameter import Parameter
 from torch.distributions import RelaxedOneHotCategorical
 from torch.distributions import Categorical
-from typing import Callable, Literal
+from typing import Callable, Literal, Optional
 import torch
 
 from ...data import Batch
@@ -76,10 +76,21 @@ class RnnReinforceSender(SenderBase):
     def reset_parameters(self):
         torch.nn.init.normal_(self.bos_embedding)
 
-    def __call__(self, batch: Batch) -> SenderOutput:
-        return self.forward(batch)
+    def __call__(
+        self,
+        batch: Batch,
+        forced_message: Optional[Tensor] = None,
+    ) -> SenderOutput:
+        return self.forward(
+            batch,
+            forced_message=forced_message,
+        )
 
-    def forward(self, batch: Batch) -> SenderOutput:
+    def forward(
+        self,
+        batch: Batch,
+        forced_message: Optional[Tensor] = None,
+    ) -> SenderOutput:
         input = batch.input
         batch_size = input.shape[0]
 
@@ -95,7 +106,14 @@ class RnnReinforceSender(SenderBase):
         logits_list: list[Tensor] = []
         estimated_value_list: list[Tensor] = []
 
-        for _ in range(self.max_len if self.fix_message_length else (self.max_len - 1)):
+        if forced_message is not None:
+            num_steps = forced_message.shape[1]
+        elif self.fix_message_length:
+            num_steps = self.max_len
+        else:
+            num_steps = self.max_len - 1
+
+        for step in range(num_steps):
             if isinstance(self.cell, LSTMCell):
                 h, c = self.cell.forward(e, (h, c))
             else:
@@ -107,6 +125,8 @@ class RnnReinforceSender(SenderBase):
             step_logits = self.hidden_to_output.forward(h)
             step_estimated_value = self.value_estimator.forward(h)
 
+            if forced_message is not None:
+                symbol = forced_message[:, step]
             if self.training:
                 symbol = Categorical(logits=step_logits).sample()
             else:
