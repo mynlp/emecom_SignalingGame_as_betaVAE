@@ -1,5 +1,5 @@
 from torch import Tensor
-from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, Linear, LayerNorm, Identity
+from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, Linear, LayerNorm, Identity, Dropout
 from torch.nn.parameter import Parameter
 from torch.distributions import RelaxedOneHotCategorical
 from torch.distributions import Categorical
@@ -39,6 +39,7 @@ class RnnReinforceSender(SenderBase):
         gs_temperature: float = 1,
         gs_straight_through: bool = True,
         enable_layer_norm: bool = True,
+        dropout: float = 0,
     ) -> None:
         super().__init__()
 
@@ -63,6 +64,8 @@ class RnnReinforceSender(SenderBase):
             self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
         else:
             self.layer_norm = Identity()
+
+        self.dropout = Dropout(p=dropout)
 
         self.reset_parameters()
 
@@ -94,6 +97,12 @@ class RnnReinforceSender(SenderBase):
         c = torch.zeros_like(h)
         e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
+        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
+        e_dropout_mask = self.dropout.forward(torch.ones_like(e))
+
+        h = h * h_dropout_mask
+        e = e * e_dropout_mask
+
         symbol_list: list[Tensor] = []
         logits_list: list[Tensor] = []
         estimated_value_list: list[Tensor] = []
@@ -122,6 +131,8 @@ class RnnReinforceSender(SenderBase):
                 symbol = Categorical(logits=step_logits).sample()
             else:
                 symbol = step_logits.argmax(dim=-1)
+
+            e = self.embedding.forward(symbol)
 
             symbol_list.append(symbol)
             logits_list.append(step_logits)
