@@ -1,12 +1,5 @@
 from torch import Tensor
-from torch.nn import (
-    RNNCell,
-    GRUCell,
-    LSTMCell,
-    Embedding,
-    Linear,
-    LayerNorm,
-)
+from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, Linear, LayerNorm, Identity
 from torch.nn.parameter import Parameter
 from torch.distributions import RelaxedOneHotCategorical
 from torch.distributions import Categorical
@@ -69,7 +62,7 @@ class RnnReinforceSender(SenderBase):
         if enable_layer_norm:
             self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
         else:
-            self.layer_norm = None
+            self.layer_norm = Identity()
 
         self.reset_parameters()
 
@@ -95,8 +88,7 @@ class RnnReinforceSender(SenderBase):
         batch_size = input.shape[0]
 
         encoder_hidden_state = self.object_encoder(input)
-        if self.layer_norm is not None:
-            encoder_hidden_state = self.layer_norm.forward(encoder_hidden_state)
+        encoder_hidden_state = self.layer_norm.forward(encoder_hidden_state)
 
         h = encoder_hidden_state
         c = torch.zeros_like(h)
@@ -119,8 +111,7 @@ class RnnReinforceSender(SenderBase):
             else:
                 h = self.cell.forward(e, h)
 
-            if self.layer_norm is not None:
-                h = self.layer_norm.forward(h)
+            h = self.layer_norm.forward(h)
 
             step_logits = self.hidden_to_output.forward(h)
             step_estimated_value = self.value_estimator.forward(h)
