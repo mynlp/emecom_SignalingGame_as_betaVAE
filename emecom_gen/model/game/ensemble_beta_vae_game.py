@@ -1,5 +1,5 @@
 from typing import Sequence, Optional, Literal
-from torch.nn import CrossEntropyLoss
+from torch.nn import functional as F
 from torch import Tensor, randint
 import torch
 
@@ -49,9 +49,7 @@ class EnsembleBetaVAEGame(GameBase):
             gumbel_softmax_mode=gumbel_softmax_mode,
             accumulate_grad_batches=accumulate_grad_batches,
         )
-        assert len(senders) == len(receivers)
 
-        self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta_scheduler = beta_scheduler
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
         self.sender_update_prob = sender_update_prob
@@ -66,20 +64,18 @@ class EnsembleBetaVAEGame(GameBase):
         receiver_index: Optional[int] = None,
     ):
         if sender_index is None:
-            sender_index = int(randint(low=0, high=len(self.senders), size=()).item())
+            sender_index = int(randint(low=0, high=self.n_agent_pairs, size=()).item())
         if receiver_index is None:
-            receiver_index = int(randint(low=0, high=len(self.receivers), size=()).item())
+            receiver_index = int(randint(low=0, high=self.n_agent_pairs, size=()).item())
 
-        sender = self.senders[sender_index]
-        receiver = self.receivers[receiver_index]
-        prior = self.priors[receiver_index]
-
-        output_s = sender.forward(batch)
-        output_r = receiver.forward(
-            message=output_s.message, message_length=output_s.message_length, candidates=batch.candidates
+        output_s = self.senders[sender_index].forward(batch)
+        output_r = self.receivers[receiver_index].forward(
+            message=output_s.message,
+            message_length=output_s.message_length,
+            candidates=batch.candidates,
         )
 
-        match prior:
+        match self.priors[receiver_index]:
             case "receiver":
                 output_p = output_r.message_prior_output
                 assert (
@@ -89,20 +85,21 @@ class EnsembleBetaVAEGame(GameBase):
                 output_p = p.forward(message=output_s.message, message_length=output_s.message_length)
 
         matching_count = (output_r.last_logits.argmax(dim=-1) == batch.target_label).long()
-        while len(matching_count.shape) > 1:
+        while matching_count.dim() > 1:
             matching_count = matching_count.sum(dim=-1)
         acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
 
         mask = output_s.message_mask
         beta = self.beta_scheduler.forward(self.batch_step, acc=acc)
 
-        communication_loss = self.cross_entropy_loss.forward(
-            input=output_r.all_logits.permute(0, -1, *tuple(range(1, len(output_r.all_logits.shape) - 1))),
+        communication_loss = F.cross_entropy(
+            input=output_r.all_logits.permute(0, -1, *tuple(range(1, output_r.all_logits.dim() - 1))),
             target=batch.target_label.unsqueeze(1).expand(
                 batch.target_label.shape[0], output_r.all_logits.shape[1], *batch.target_label.shape[1:]
             ),
+            reduction="none",
         )
-        while len(communication_loss.shape) > 2:
+        while communication_loss.dim() > 2:
             communication_loss = communication_loss.sum(dim=-1)
 
         last_communication_loss = communication_loss[torch.arange(batch.batch_size), output_s.message_length - 1]
@@ -111,7 +108,7 @@ class EnsembleBetaVAEGame(GameBase):
             last_communication_loss.detach().unsqueeze(1)
             + inversed_cumsum((output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask, dim=1)
             * beta
-            / len(self.senders)
+            / self.n_agent_pairs
         ) * mask
 
         match self.baseline:
@@ -143,7 +140,7 @@ class EnsembleBetaVAEGame(GameBase):
             if self.receiver_impatience
             else last_communication_loss
         )
-        loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta / len(self.senders)
+        loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta / self.n_agent_pairs
 
         update_s = torch.bernoulli(torch.as_tensor(self.sender_update_prob, dtype=torch.float, device=self.device))
         update_r = torch.bernoulli(torch.as_tensor(self.receiver_update_prob, dtype=torch.float, device=self.device))
@@ -172,9 +169,9 @@ class EnsembleBetaVAEGame(GameBase):
         receiver_index: Optional[int] = None,
     ):
         if sender_index is None:
-            sender_index = int(randint(low=0, high=len(self.senders), size=()).item())
+            sender_index = int(randint(low=0, high=self.n_agent_pairs, size=()).item())
         if receiver_index is None:
-            receiver_index = int(randint(low=0, high=len(self.receivers), size=()).item())
+            receiver_index = int(randint(low=0, high=self.n_agent_pairs, size=()).item())
 
         sender = self.senders[sender_index]
         receiver = self.receivers[receiver_index]
@@ -203,9 +200,10 @@ class EnsembleBetaVAEGame(GameBase):
             logits_r = output_r.logits[:, step]
             degree_of_eos = output_s.message[:, step, 0]
 
-            step_communication_loss = self.cross_entropy_loss.forward(
+            step_communication_loss = F.cross_entropy(
                 input=logits_r.permute(0, -1, *tuple(range(1, len(logits_r.shape) - 1))),
                 target=batch.target_label,
+                reduction="none",
             )
             while len(step_communication_loss.shape) > 1:
                 step_communication_loss = step_communication_loss.sum(dim=-1)
@@ -227,7 +225,7 @@ class EnsembleBetaVAEGame(GameBase):
             not_ended = not_ended * (1.0 - degree_of_eos)
 
         beta = self.beta_scheduler.forward(step=self.batch_step, acc=acc)
-        surrogate_loss = communication_loss + beta * len(self.senders) * kl_term_loss
+        surrogate_loss = communication_loss + beta * kl_term_loss / len(self.senders)
 
         return GameOutputGumbelSoftmax(
             loss=surrogate_loss,
