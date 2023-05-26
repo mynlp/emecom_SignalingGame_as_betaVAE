@@ -1,5 +1,5 @@
 from pytorch_lightning import LightningModule
-from typing import Any, Optional, Literal, Sequence
+from typing import Any, Optional, Literal
 from torch.nn import Parameter, Module
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import LambdaLR
@@ -20,6 +20,10 @@ class GameBase(LightningModule):
     receivers: list[ReceiverBase]
     priors: list[MessagePriorBase | Literal["receiver"]]
     baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline
+
+    @property
+    def n_agent_pairs(self):
+        return len(self.senders)
 
     def __init__(
         self,
