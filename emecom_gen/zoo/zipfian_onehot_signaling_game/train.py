@@ -42,7 +42,7 @@ class ArgumentParser(CommonArgumentParser):
         if self.experiment_version == "":
             delimiter = "_"
 
-            beta_scheduler_info = f"BETA{self.beta_scheduler_type}"
+            beta_scheduler_info: str = f"BETA{self.beta_scheduler_type}"
             match self.beta_scheduler_type:
                 case "constant":
                     beta_scheduler_info += f"V{self.beta_constant_value}"
