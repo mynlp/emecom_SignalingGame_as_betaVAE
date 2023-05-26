@@ -157,7 +157,11 @@ class RnnReinforceSender(SenderBase):
             encoder_hidden_state=encoder_hidden_state,
         )
 
-    def forward_gumbel_softmax(self, batch: Batch) -> SenderOutputGumbelSoftmax:
+    def forward_gumbel_softmax(
+        self,
+        batch: Batch,
+        forced_message: Optional[Tensor] = None,
+    ) -> SenderOutputGumbelSoftmax:
         input = batch.input
 
         batch_size = input.shape[0]
@@ -172,7 +176,14 @@ class RnnReinforceSender(SenderBase):
         symbol_list: list[Tensor] = []
         logits_list: list[Tensor] = []
 
-        for _ in range(self.max_len if self.fix_message_length else (self.max_len - 1)):
+        if forced_message is not None:
+            num_steps = forced_message.shape[1]
+        elif self.fix_message_length:
+            num_steps = self.max_len
+        else:
+            num_steps = self.max_len - 1
+
+        for step in range(num_steps):
             if isinstance(self.cell, LSTMCell):
                 h, c = self.cell.forward(e, (h, c))
             else:
@@ -182,7 +193,9 @@ class RnnReinforceSender(SenderBase):
 
             step_logits = self.hidden_to_output.forward(h)
 
-            if self.training:
+            if forced_message is not None:
+                symbol = forced_message[:, step]
+            elif self.training:
                 symbol: Tensor = RelaxedOneHotCategorical(temperature=self.gs_temperature, logits=step_logits).rsample()
                 if self.gs_straight_through:
                     symbol = symbol + (shape_keeping_argmax(symbol) - symbol).detach()

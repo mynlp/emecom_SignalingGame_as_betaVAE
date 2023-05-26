@@ -30,5 +30,9 @@ class SenderBase(Module):
     ) -> SenderOutput:
         raise NotImplementedError()
 
-    def forward_gumbel_softmax(self, batch: Batch) -> SenderOutputGumbelSoftmax:
+    def forward_gumbel_softmax(
+        self,
+        batch: Batch,
+        forced_message: Optional[Tensor] = None,
+    ) -> SenderOutputGumbelSoftmax:
         raise NotImplementedError()
