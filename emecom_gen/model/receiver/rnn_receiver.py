@@ -70,13 +70,11 @@ class RnnReceiverBase(ReceiverBase):
         message_length: Tensor,
         candidates: Optional[Tensor] = None,
     ):
-        batch_size = message.shape[0]
+        batch_size, total_length = message.shape
         device = message.device
 
         embedded_message = self.symbol_embedding.forward(message)
-
         e_dropout_mask = self.dropout.forward(torch.ones_like(embedded_message[:, 0])).unsqueeze(1)
-
         embedded_message = embedded_message * e_dropout_mask
 
         if self.bos_embedding is not None:
@@ -87,8 +85,11 @@ class RnnReceiverBase(ReceiverBase):
                 ],
                 dim=1,
             )
+            num_steps = total_length + 1
+        else:
+            num_steps = total_length
 
-        logits_list: list[Tensor] = []
+        object_logits_list: list[Tensor] = []
         symbol_logits_list: list[Tensor] = []
 
         h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
@@ -96,7 +97,7 @@ class RnnReceiverBase(ReceiverBase):
 
         h_dropout_mask = self.dropout.forward(torch.ones_like(h))
 
-        for step in range(message.shape[1] + int(self.bos_embedding is not None)):
+        for step in range(num_steps):
             not_ended = (step < message_length).unsqueeze(1).float()
 
             if isinstance(self.cell, LSTMCell):
@@ -110,16 +111,15 @@ class RnnReceiverBase(ReceiverBase):
 
             h = not_ended * next_h + (1 - not_ended) * h
 
-            logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
+            object_logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
 
             if self.symbol_predictor is not None:
                 symbol_logits_list.append(self.symbol_predictor.forward(h))
 
-        all_logits = torch.stack(logits_list, dim=1)
-        last_logits = all_logits[torch.arange(batch_size), message_length - 1]
-
-        if len(symbol_logits_list) > 0:
+        if self.bos_embedding is not None:
+            object_logits_list.pop(0)  # the first object logits is not necessary
             symbol_logits_list.pop(-1)  # the last symbol logits is not necessary
+
             message_log_probs = F.cross_entropy(
                 input=torch.stack(symbol_logits_list, dim=2),  # (batch, vocab_size, seq_len)
                 target=message,  # (batch, seq_len)
@@ -129,9 +129,12 @@ class RnnReceiverBase(ReceiverBase):
         else:
             message_prior_output = None
 
+        all_object_logits = torch.stack(object_logits_list, dim=1)
+        last_object_logits = all_object_logits[torch.arange(batch_size), message_length - 1]
+
         return ReceiverOutput(
-            last_logits=last_logits,
-            all_logits=all_logits,
+            last_logits=last_object_logits,
+            all_logits=all_object_logits,
             message_prior_output=message_prior_output,
         )
 
