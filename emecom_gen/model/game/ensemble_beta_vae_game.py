@@ -135,11 +135,7 @@ class EnsembleBetaVAEGame(GameBase):
                     .clamp(min=1e-8)
                 )
 
-        loss_r = (
-            (communication_loss * mask[:, : communication_loss.shape[1]]).sum(dim=-1)
-            if self.receiver_impatience
-            else last_communication_loss
-        )
+        loss_r = last_communication_loss
         loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta / self.n_agent_pairs
 
         update_s = torch.bernoulli(torch.as_tensor(self.sender_update_prob, dtype=torch.float, device=self.device))
@@ -152,6 +148,10 @@ class EnsembleBetaVAEGame(GameBase):
             + ((loss_s - baseline.detach()) * mask * output_s.message_log_probs / denominator).sum(dim=-1) * update_s
             + ((loss_s - baseline).square() * mask).sum(dim=-1) * update_s
         )
+
+        if self.receiver_impatience:
+            impatient_loss = (communication_loss * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+            surrogate_loss = surrogate_loss + impatient_loss
 
         return GameOutput(
             loss=surrogate_loss,
