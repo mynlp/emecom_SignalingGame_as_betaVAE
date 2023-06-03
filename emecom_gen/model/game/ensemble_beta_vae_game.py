@@ -151,7 +151,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         if self.receiver_impatience:
             impatient_loss = (communication_loss * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-            surrogate_loss = surrogate_loss + impatient_loss
+            surrogate_loss = surrogate_loss + impatient_loss * update_r
 
         return GameOutput(
             loss=surrogate_loss,
