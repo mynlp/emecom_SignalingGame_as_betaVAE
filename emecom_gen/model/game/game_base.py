@@ -31,11 +31,16 @@ class GameBase(LightningModule):
         senders: list[SenderBase],
         receivers: list[ReceiverBase],
         priors: list[MessagePriorBase | Literal["receiver"]],
-        lr: float,
+        sender_lr: float,
+        receiver_lr: float,
         optimizer_class: Literal["adam", "sgd"],
         baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline,
+        sender_weight_decay: float = 0,
+        receiver_weight_decay: float = 0,
+        sender_update_prob: float = 1,
+        receiver_update_prob: float = 1,
+        prior_update_prob: float = 1,
         num_warmup_steps: int = 0,
-        weight_decay: float = 0,
         gradient_clip_val: float = 1,
         gumbel_softmax_mode: bool = False,
         accumulate_grad_batches: int = 1,
@@ -43,13 +48,21 @@ class GameBase(LightningModule):
         super().__init__()
         assert len(senders) == len(receivers) == len(priors)
 
-        self.lr = lr
-        self.baseline = baseline
+        self.sender_lr = sender_lr
+        self.receiver_lr = receiver_lr
+
+        self.sender_weight_decay = sender_weight_decay
+        self.receiver_weight_decay = receiver_weight_decay
+
+        self.sender_update_prob = sender_update_prob
+        self.receiver_update_prob = receiver_update_prob
+        self.prior_update_prob = prior_update_prob
+
         self.num_warmup_steps = num_warmup_steps
-        self.weight_decay = weight_decay
         self.gradient_clip_val = gradient_clip_val
         self.gumbel_softmax_mode = gumbel_softmax_mode
         self.accumulate_grad_batches = accumulate_grad_batches
+
         self.automatic_optimization = False
 
         self.batch_step = 0
@@ -63,6 +76,7 @@ class GameBase(LightningModule):
         self.senders = senders
         self.receivers = receivers
         self.priors = priors
+        self.baseline = baseline
 
         # Type-hinting of nn.Module is not well-supported.
         # Instead, we add modules directly.
@@ -152,14 +166,53 @@ class GameBase(LightningModule):
             self.clip_gradients(optimizer_r, self.gradient_clip_val, "norm")
             self.clip_gradients(optimizer_p, self.gradient_clip_val, "norm")
             self.clip_gradients(optimizer_b, self.gradient_clip_val, "norm")
-            optimizer_s.step()
-            optimizer_r.step()
-            optimizer_p.step()
-            optimizer_b.step()
-            scheduler_s.step()
-            scheduler_r.step()
-            scheduler_p.step()
-            scheduler_b.step()
+
+            update_s = (
+                torch.bernoulli(
+                    torch.as_tensor(
+                        self.sender_update_prob,
+                        dtype=torch.float,
+                        device=self.device,
+                    )
+                )
+                .bool()
+                .item()
+            )
+            update_r = (
+                torch.bernoulli(
+                    torch.as_tensor(
+                        self.receiver_update_prob,
+                        dtype=torch.float,
+                        device=self.device,
+                    )
+                )
+                .bool()
+                .item()
+            )
+            update_p = (
+                torch.bernoulli(
+                    torch.as_tensor(
+                        self.prior_update_prob,
+                        dtype=torch.float,
+                        device=self.device,
+                    )
+                )
+                .bool()
+                .item()
+            )
+
+            if update_s:
+                optimizer_s.step()
+                scheduler_s.step()
+                optimizer_b.step()
+                scheduler_b.step()
+            if update_r:
+                optimizer_r.step()
+                scheduler_r.step()
+            if update_p:
+                optimizer_p.step()
+                scheduler_p.step()
+
             self.log_dict(
                 game_output.make_log_dict(prefix="train_"),
                 batch_size=batch.batch_size,
@@ -231,21 +284,28 @@ class GameBase(LightningModule):
         schedulers: list[LambdaLR] = []
 
         dummy_param = Parameter(data=torch.zeros(size=(0,)))
-        for x in self.senders + self.receivers + self.priors:
-            if not isinstance(x, Module) or len(list(x.parameters())) == 0:
-                optimizer = self.optimizer_class([dummy_param], lr=self.lr, weight_decay=self.weight_decay)
-            else:
-                optimizer = self.optimizer_class(x.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-            optimizers.append(optimizer)
-            schedulers.append(get_constant_schedule_with_warmup(optimizer, num_warmup_steps=self.num_warmup_steps))
-
-        if isinstance(self.baseline, Module):
-            optimizer = self.optimizer_class(self.baseline.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-            optimizers.append(optimizer)
-            schedulers.append(get_constant_schedule_with_warmup(optimizer, num_warmup_steps=self.num_warmup_steps))
-        else:
-            optimizer = self.optimizer_class([dummy_param], lr=self.lr, weight_decay=self.weight_decay)
-            optimizers.append(optimizer)
-            schedulers.append(get_constant_schedule_with_warmup(optimizer, num_warmup_steps=self.num_warmup_steps))
+        for modules, lr, wd in (
+            (self.senders, self.sender_lr, self.sender_weight_decay),
+            (self.receivers, self.receiver_lr, self.receiver_weight_decay),
+            (self.priors, self.receiver_lr, self.receiver_weight_decay),
+            ((self.baseline,), self.sender_lr, self.sender_weight_decay),
+        ):
+            for module in modules:
+                if not isinstance(module, Module) or len(list(module.parameters())) == 0:
+                    params = [dummy_param]
+                else:
+                    params = module.parameters()
+                optimizer = self.optimizer_class(
+                    params=params,
+                    lr=lr,
+                    weight_decay=wd,
+                )
+                optimizers.append(optimizer)
+                schedulers.append(
+                    get_constant_schedule_with_warmup(
+                        optimizer,
+                        num_warmup_steps=self.num_warmup_steps,
+                    )
+                )
 
         return optimizers, schedulers

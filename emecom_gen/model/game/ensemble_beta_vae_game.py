@@ -20,11 +20,14 @@ def inversed_cumsum(x: Tensor, dim: int):
 class EnsembleBetaVAEGame(GameBase):
     def __init__(
         self,
+        *,
         senders: Sequence[SenderBase],
         receivers: Sequence[ReceiverBase],
         priors: Sequence[MessagePriorBase | Literal["receiver"]],
-        lr: float = 0.0001,
-        weight_decay: float = 0,
+        sender_lr: float,
+        receiver_lr: float,
+        sender_weight_decay: float = 0,
+        receiver_weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
         baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
@@ -38,23 +41,25 @@ class EnsembleBetaVAEGame(GameBase):
         accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__(
-            lr=lr,
             senders=list(senders),
             receivers=list(receivers),
             priors=list(priors),
+            sender_lr=sender_lr,
+            receiver_lr=receiver_lr,
             baseline=baseline,
             optimizer_class=optimizer_class,
             num_warmup_steps=num_warmup_steps,
-            weight_decay=weight_decay,
+            sender_weight_decay=sender_weight_decay,
+            receiver_weight_decay=receiver_weight_decay,
+            sender_update_prob=sender_update_prob,
+            receiver_update_prob=receiver_update_prob,
+            prior_update_prob=prior_update_prob,
             gumbel_softmax_mode=gumbel_softmax_mode,
             accumulate_grad_batches=accumulate_grad_batches,
         )
 
         self.beta_scheduler = beta_scheduler
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
-        self.sender_update_prob = sender_update_prob
-        self.receiver_update_prob = receiver_update_prob
-        self.prior_update_prob = prior_update_prob
         self.receiver_impatience = receiver_impatience
 
     def forward(
@@ -138,20 +143,16 @@ class EnsembleBetaVAEGame(GameBase):
         loss_r = last_communication_loss
         loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta / self.n_agent_pairs
 
-        update_s = torch.bernoulli(torch.as_tensor(self.sender_update_prob, dtype=torch.float, device=self.device))
-        update_r = torch.bernoulli(torch.as_tensor(self.receiver_update_prob, dtype=torch.float, device=self.device))
-        update_p = torch.bernoulli(torch.as_tensor(self.prior_update_prob, dtype=torch.float, device=self.device))
-
         surrogate_loss = (
-            loss_r * update_r
-            + loss_p * update_p
-            + ((loss_s - baseline.detach()) * mask * output_s.message_log_probs / denominator).sum(dim=-1) * update_s
-            + ((loss_s - baseline).square() * mask).sum(dim=-1) * update_s
+            loss_r
+            + loss_p
+            + ((loss_s - baseline.detach()) * mask * output_s.message_log_probs / denominator).sum(dim=-1)
+            + ((loss_s - baseline).square() * mask).sum(dim=-1)
         )
 
         if self.receiver_impatience:
             impatient_loss = (communication_loss * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-            surrogate_loss = surrogate_loss + impatient_loss * update_r
+            surrogate_loss = surrogate_loss + impatient_loss
 
         return GameOutput(
             loss=surrogate_loss,

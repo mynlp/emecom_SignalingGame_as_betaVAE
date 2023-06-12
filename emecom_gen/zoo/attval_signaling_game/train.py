@@ -124,7 +124,7 @@ def main():
             hidden_size=args.sender_hidden_size,
             fix_message_length=args.fix_message_length,
             enable_layer_norm=args.sender_layer_norm,
-            dropout=args.dropout,
+            dropout=args.sender_dropout,
         )
         for _ in range(args.n_agent_pairs)
     ]
@@ -142,7 +142,7 @@ def main():
             hidden_size=args.sender_hidden_size,
             enable_layer_norm=args.receiver_layer_norm,
             enable_symbol_prediction=(args.prior_type == "receiver"),
-            dropout=args.dropout,
+            dropout=args.receiver_dropout,
         )
         for _ in range(args.n_agent_pairs)
     ]
@@ -191,10 +191,14 @@ def main():
         case "constant":
             beta_scheduler = ConstantBetaScheduler(args.beta_constant_value)
         case "sigmoid":
-            beta_scheduler = SigmoidBetaScheduler(args.beta_sigmoid_gain, args.beta_sigmoid_offset)
+            beta_scheduler = SigmoidBetaScheduler(
+                args.beta_sigmoid_gain,
+                args.beta_sigmoid_offset,
+            )
         case "acc-based":
             beta_scheduler = AccuracyBasedBetaScheduler(
-                args.beta_accbased_exponent, args.beta_accbased_smoothing_factor
+                args.beta_accbased_exponent,
+                args.beta_accbased_smoothing_factor,
             )
 
     match args.baseline_type:
@@ -212,8 +216,10 @@ def main():
         senders=senders,
         receivers=receivers,
         priors=priors,
-        lr=args.lr,
-        weight_decay=args.weight_decay,
+        sender_lr=args.sender_lr,
+        receiver_lr=args.receiver_lr,
+        sender_weight_decay=args.sender_weight_decay,
+        receiver_weight_decay=args.receiver_weight_decay,
         beta_scheduler=beta_scheduler,
         baseline=baseline,
         reward_normalization_type=args.reward_normalization_type,

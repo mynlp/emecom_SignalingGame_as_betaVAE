@@ -16,16 +16,22 @@ class CommonArgumentParser(Tap):
     max_len: int = 2  # Maximum length of message.
     fix_message_length: bool = True  # Wether to fix message length.
 
-    sender_embedding_dim: int = 10  # Embedding dim.
-    sender_hidden_size: int = 512  # Hidden size.
-    sender_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # RNN cell type.
-    sender_layer_norm: bool = True
+    sender_embedding_dim: int = 10  # Sender's embedding dim.
+    sender_hidden_size: int = 512  # Sender's hidden size.
+    sender_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # Sender's RNN cell type.
+    sender_layer_norm: bool = True  # Whether to enable sender's LayerNorm.
+    sender_lr: float = 1e-4  # Sender's learning rate.
+    sender_weight_decay: float = 0  # Sender's weight decay.
+    sender_dropout: float = 0  # Sender's dropout rate.
 
-    receiver_embedding_dim: int = 10  # Embedding dim.
-    receiver_hidden_size: int = 128  # Hidden size.
-    receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # RNN cell type.
-    receiver_impatience: bool = False
-    receiver_layer_norm: bool = False
+    receiver_embedding_dim: int = 10  # Receiver's embedding dim.
+    receiver_hidden_size: int = 128  # Receiver's hidden size.
+    receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # Receiver's RNN cell type.
+    receiver_impatience: bool = False  # Wether to enable receiver's impatience.
+    receiver_layer_norm: bool = False  # Wether to enable receiver's LayerNorm.
+    receiver_lr: float = 1e-4  # Receiver's learning rate.
+    receiver_weight_decay: float = 0  # Receiver's weight decay.
+    receiver_dropout: float = 0  # Receiver's dropout p.
 
     sender_update_prob: float = 1
     receiver_update_prob: float = 1
@@ -34,8 +40,6 @@ class CommonArgumentParser(Tap):
     n_epochs: int = 100000  # Number of epochs.
     batch_size: int = 1024  # Batch size of data loader.
     num_workers: int = 4  # Number of workers of data loader.
-    lr: float = 1e-4  # Learning rate.
-    dropout: float = 0  # Dropout p.
 
     early_stopping_monitor: Optional[str] = None
     early_stopping_mode: Literal["min", "max"] = "max"
@@ -53,7 +57,6 @@ class CommonArgumentParser(Tap):
 
     optimizer_class: Literal["adam", "sgd"] = "adam"
     num_warmup_steps: int = 0
-    weight_decay: float = 0
 
     gumbel_softmax_mode: bool = False
 
