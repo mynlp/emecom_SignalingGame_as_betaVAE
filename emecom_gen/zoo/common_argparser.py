@@ -20,6 +20,7 @@ class CommonArgumentParser(Tap):
     sender_hidden_size: int = 512  # Sender's hidden size.
     sender_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # Sender's RNN cell type.
     sender_layer_norm: bool = True  # Whether to enable sender's LayerNorm.
+    sender_residual_connection: bool = False  # Whether to enable sender's residual connection.
     sender_lr: float = 1e-4  # Sender's learning rate.
     sender_weight_decay: float = 0  # Sender's weight decay.
     sender_dropout: float = 0  # Sender's dropout rate.
@@ -29,6 +30,7 @@ class CommonArgumentParser(Tap):
     receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # Receiver's RNN cell type.
     receiver_impatience: bool = False  # Wether to enable receiver's impatience.
     receiver_layer_norm: bool = False  # Wether to enable receiver's LayerNorm.
+    receiver_residual_connection: bool = False  # Wether to enable receiver's residual connection.
     receiver_lr: float = 1e-4  # Receiver's learning rate.
     receiver_weight_decay: float = 0  # Receiver's weight decay.
     receiver_dropout: float = 0  # Receiver's dropout p.
