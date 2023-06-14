@@ -124,6 +124,7 @@ def main():
             hidden_size=args.sender_hidden_size,
             fix_message_length=args.fix_message_length,
             enable_layer_norm=args.sender_layer_norm,
+            enable_residual_connection=args.sender_residual_connection,
             dropout=args.sender_dropout,
         )
         for _ in range(args.n_agent_pairs)
@@ -141,6 +142,7 @@ def main():
             embedding_dim=args.sender_embedding_dim,
             hidden_size=args.sender_hidden_size,
             enable_layer_norm=args.receiver_layer_norm,
+            enable_residual_connection=args.receiver_residual_connection,
             enable_symbol_prediction=(args.prior_type == "receiver"),
             dropout=args.receiver_dropout,
         )

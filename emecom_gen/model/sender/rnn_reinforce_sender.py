@@ -39,6 +39,7 @@ class RnnReinforceSender(SenderBase):
         gs_temperature: float = 1,
         gs_straight_through: bool = True,
         enable_layer_norm: bool = True,
+        enable_residual_connection: bool = True,
         dropout: float = 0,
     ) -> None:
         super().__init__()
@@ -65,6 +66,7 @@ class RnnReinforceSender(SenderBase):
         else:
             self.layer_norm = Identity()
 
+        self.enable_residual_connection = enable_residual_connection
         self.dropout = Dropout(p=dropout)
 
         self.reset_parameters()
@@ -116,12 +118,17 @@ class RnnReinforceSender(SenderBase):
 
         for step in range(num_steps):
             if isinstance(self.cell, LSTMCell):
-                h, c = self.cell.forward(e, (h, c))
+                next_h, next_c = self.cell.forward(e, (h, c))
             else:
-                h = self.cell.forward(e, h)
+                next_h = self.cell.forward(e, h)
 
-            h = h * h_dropout_mask
-            h = self.layer_norm.forward(h)
+            next_h = next_h * h_dropout_mask
+            if self.enable_residual_connection:
+                next_h = next_h + h
+            next_h = self.layer_norm.forward(next_h)
+
+            h = next_h
+            c = next_c
 
             step_logits = self.hidden_to_output.forward(h)
             step_estimated_value = self.value_estimator.forward(h)

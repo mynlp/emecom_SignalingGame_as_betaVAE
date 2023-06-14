@@ -18,6 +18,7 @@ class RnnReceiverBase(ReceiverBase):
         embedding_dim: int,
         hidden_size: int,
         enable_layer_norm: bool = False,
+        enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
         dropout: float = 0,
     ) -> None:
@@ -32,6 +33,7 @@ class RnnReceiverBase(ReceiverBase):
         else:
             self.layer_norm = Identity()
 
+        self.enable_residual_connection = enable_residual_connection
         self.dropout = Dropout(dropout)
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
@@ -107,6 +109,8 @@ class RnnReceiverBase(ReceiverBase):
                 next_h = self.cell.forward(embedded_message[:, step], h)
 
             next_h = next_h * h_dropout_mask
+            if self.enable_residual_connection:
+                next_h = next_h + h
             next_h = self.layer_norm.forward(next_h)
 
             h = not_ended * next_h + (1 - not_ended) * h
