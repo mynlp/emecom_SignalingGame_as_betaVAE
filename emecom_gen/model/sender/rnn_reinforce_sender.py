@@ -118,17 +118,14 @@ class RnnReinforceSender(SenderBase):
 
         for step in range(num_steps):
             if isinstance(self.cell, LSTMCell):
-                next_h, next_c = self.cell.forward(e, (h, c))
+                next_h, c = self.cell.forward(e, (h, c))
             else:
                 next_h = self.cell.forward(e, h)
 
             next_h = next_h * h_dropout_mask
             if self.enable_residual_connection:
                 next_h = next_h + h
-            next_h = self.layer_norm.forward(next_h)
-
-            h = next_h
-            c = next_c
+            h = self.layer_norm.forward(next_h)
 
             step_logits = self.hidden_to_output.forward(h)
             step_estimated_value = self.value_estimator.forward(h)
