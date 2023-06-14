@@ -200,6 +200,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         embedding_dim: int,
         hidden_size: int,
         enable_layer_norm: bool = False,
+        enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
         dropout: float = 0,
     ) -> None:
@@ -209,6 +210,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
+            enable_residual_connection=enable_residual_connection,
             enable_symbol_prediction=enable_symbol_prediction,
             dropout=dropout,
         )
@@ -232,6 +234,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         embedding_dim: int,
         hidden_size: int,
         enable_layer_norm: bool = False,
+        enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
         dropout: float = 0,
     ) -> None:
@@ -241,6 +244,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
+            enable_residual_connection=enable_residual_connection,
             enable_symbol_prediction=enable_symbol_prediction,
             dropout=dropout,
         )
