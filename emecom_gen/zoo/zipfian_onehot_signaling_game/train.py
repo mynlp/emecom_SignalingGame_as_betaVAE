@@ -142,6 +142,7 @@ def main():
             enable_layer_norm=args.receiver_layer_norm,
             enable_residual_connection=args.receiver_residual_connection,
             enable_symbol_prediction=(args.prior_type == "receiver"),
+            enable_object_logits_cumsum=args.receiver_object_logits_cumsum,
             dropout=args.receiver_dropout,
         )
         for _ in range(args.n_agent_pairs)
