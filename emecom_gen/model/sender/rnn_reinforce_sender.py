@@ -84,6 +84,27 @@ class RnnReinforceSender(SenderBase):
             forced_message=forced_message,
         )
 
+    def _step_hidden_state(
+        self,
+        e: Tensor,
+        h: Tensor,
+        c: Tensor,
+        h_dropout_mask: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        if isinstance(self.cell, LSTMCell):
+            assert c is not None
+            next_h, next_c = self.cell.forward(e, (h, c))
+        else:
+            next_h = self.cell.forward(e, h)
+            next_c = c
+
+        next_h = next_h * h_dropout_mask
+        if self.enable_residual_connection:
+            next_h = next_h + h
+        next_h = self.layer_norm.forward(next_h)
+
+        return next_h, next_c
+
     def forward(
         self,
         batch: Batch,
@@ -117,15 +138,7 @@ class RnnReinforceSender(SenderBase):
             num_steps = self.max_len - 1
 
         for step in range(num_steps):
-            if isinstance(self.cell, LSTMCell):
-                next_h, c = self.cell.forward(e, (h, c))
-            else:
-                next_h = self.cell.forward(e, h)
-
-            next_h = next_h * h_dropout_mask
-            if self.enable_residual_connection:
-                next_h = next_h + h
-            h = self.layer_norm.forward(next_h)
+            h, c = self._step_hidden_state(e, h, c, h_dropout_mask)
 
             step_logits = self.hidden_to_output.forward(h)
             step_estimated_value = self.value_estimator.forward(h)
