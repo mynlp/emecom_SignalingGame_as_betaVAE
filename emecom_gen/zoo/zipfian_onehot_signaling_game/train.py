@@ -195,7 +195,18 @@ def main():
 
     match args.baseline_type:
         case "input-dependent":
-            baseline = InputDependentBaseline(args.n_features, args.max_len)
+            baseline = InputDependentBaseline(
+                object_encoder=Linear(args.n_features, args.sender_hidden_size),
+                vocab_size=args.vocab_size,
+                cell_type=args.sender_cell_type,
+                embedding_dim=args.sender_embedding_dim,
+                hidden_size=args.sender_hidden_size,
+                num_senders=args.n_agent_pairs,
+                num_receivers=args.n_agent_pairs,
+                enable_layer_norm=args.sender_layer_norm,
+                enable_residual_connection=args.sender_residual_connection,
+                dropout=args.sender_dropout,
+            )
         case literal:
             baseline = literal
 

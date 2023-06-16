@@ -1,6 +1,7 @@
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
+from torch.nn import Linear
 from logzero import logger
 from typing import Sequence, Literal
 import json
@@ -207,10 +208,16 @@ def main():
     match args.baseline_type:
         case "input-dependent":
             baseline = InputDependentBaseline(
-                args.n_attributes * args.n_values,
-                args.max_len,
+                object_encoder=Linear(args.n_attributes * args.n_values, args.sender_hidden_size),
+                vocab_size=args.vocab_size,
+                cell_type=args.sender_cell_type,
+                embedding_dim=args.sender_embedding_dim,
+                hidden_size=args.sender_hidden_size,
                 num_senders=args.n_agent_pairs,
                 num_receivers=args.n_agent_pairs,
+                enable_layer_norm=args.sender_layer_norm,
+                enable_residual_connection=args.sender_residual_connection,
+                dropout=args.sender_dropout,
             )
         case literal:
             baseline = literal

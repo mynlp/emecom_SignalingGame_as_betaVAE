@@ -38,6 +38,7 @@ class EnsembleBetaVAEGame(GameBase):
         prior_update_prob: float = 1,
         gumbel_softmax_mode: bool = False,
         receiver_impatience: bool = False,
+        receiver_incrementality: bool = False,
         accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__(
@@ -61,6 +62,7 @@ class EnsembleBetaVAEGame(GameBase):
         self.beta_scheduler = beta_scheduler
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
         self.receiver_impatience = receiver_impatience
+        self.receiver_incrementality = receiver_incrementality
 
     def forward(
         self,
