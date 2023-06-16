@@ -75,14 +75,18 @@ class EnsembleBetaVAEGame(GameBase):
         if receiver_index is None:
             receiver_index = int(randint(low=0, high=self.n_agent_pairs, size=()).item())
 
-        output_s = self.senders[sender_index].forward(batch)
-        output_r = self.receivers[receiver_index].forward(
+        sender = self.senders[sender_index]
+        receiver = self.receivers[receiver_index]
+        prior = self.priors[receiver_index]
+
+        output_s = sender.forward(batch)
+        output_r = receiver.forward(
             message=output_s.message,
             message_length=output_s.message_length,
             candidates=batch.candidates,
         )
 
-        match self.priors[receiver_index]:
+        match prior:
             case "receiver":
                 output_p = output_r.message_prior_output
                 assert (
@@ -160,6 +164,16 @@ class EnsembleBetaVAEGame(GameBase):
         if self.receiver_impatience:
             impatient_loss = (communication_loss * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
             surrogate_loss = surrogate_loss + impatient_loss
+
+        if self.receiver_incrementality:
+            assert prior == "receiver"
+            surrogate_loss = surrogate_loss + receiver.compute_incrementality_loss(
+                batch_size=batch.batch_size,
+                max_len=output_s.message.shape[1],
+                fix_message_length=output_s.fix_message_length,
+                device=self.device,
+                candidates=batch.candidates,
+            )
 
         return GameOutput(
             loss=surrogate_loss,

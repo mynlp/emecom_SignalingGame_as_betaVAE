@@ -228,6 +228,7 @@ def main():
         prior_update_prob=args.prior_update_prob,
         gumbel_softmax_mode=args.gumbel_softmax_mode,
         receiver_impatience=args.receiver_impatience,
+        receiver_incrementality=args.receiver_incrementality,
         accumulate_grad_batches=args.accumulate_grad_batches,
     )
 

@@ -1,6 +1,7 @@
 from torch.nn import Module
 from torch import Tensor
 from typing import Optional
+import torch
 
 from .receiver_output import ReceiverOutput, ReceiverOutputGumbelSoftmax
 
@@ -26,6 +27,19 @@ class ReceiverBase(Module):
         message: Tensor,
         candidates: Optional[Tensor],
     ) -> ReceiverOutputGumbelSoftmax:
+        raise NotImplementedError()
+
+    def compute_incrementality_loss(
+        self,
+        batch_size: int,
+        max_len: int,
+        fix_message_length: bool,
+        device: torch.device,
+        candidates: Optional[Tensor] = None,
+        update_object_predictor: bool = True,
+        update_symbol_predictor: bool = False,
+        temperature_parameter: float = 0,
+    ) -> Tensor:
         raise NotImplementedError()
 
 

@@ -4,6 +4,7 @@ from typing import Callable, Literal, Optional
 import torch
 from torch.nn.parameter import Parameter
 from torch.nn import functional as F
+from torch.distributions.categorical import Categorical
 
 from ..message_prior import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 from .receiver_base import ReceiverBase
@@ -68,30 +69,53 @@ class RnnReceiverBase(ReceiverBase):
     ) -> Tensor:
         raise NotImplementedError()
 
+    def _embed_message(
+        self,
+        message: Tensor,
+    ):
+        batch_size = message.shape[0]
+
+        embedded_message = self.symbol_embedding.forward(message)
+        embedded_message = embedded_message * self.dropout.forward(torch.ones_like(embedded_message[:, 0])).unsqueeze(1)
+
+        if self.bos_embedding is not None:
+            embedded_message = torch.cat(
+                [self.bos_embedding.reshape(1, 1, -1).expand(batch_size, 1, -1), embedded_message], dim=1
+            )
+
+        return embedded_message
+
+    def _step_hidden_state(
+        self,
+        e: Tensor,
+        h: Tensor,
+        c: Tensor,
+        h_dropout_mask: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        if isinstance(self.cell, LSTMCell):
+            assert c is not None
+            next_h, next_c = self.cell.forward(e, (h, c))
+        else:
+            next_h = self.cell.forward(e, h)
+            next_c = c
+
+        next_h = next_h * h_dropout_mask
+        if self.enable_residual_connection:
+            next_h = next_h + h
+        next_h = self.layer_norm.forward(next_h)
+
+        return next_h, next_c
+
     def forward(
         self,
         message: Tensor,
         message_length: Tensor,
         candidates: Optional[Tensor] = None,
     ):
-        batch_size, total_length = message.shape
+        batch_size = message.shape[0]
         device = message.device
 
-        embedded_message = self.symbol_embedding.forward(message)
-        e_dropout_mask = self.dropout.forward(torch.ones_like(embedded_message[:, 0])).unsqueeze(1)
-        embedded_message = embedded_message * e_dropout_mask
-
-        if self.bos_embedding is not None:
-            embedded_message = torch.cat(
-                [
-                    self.bos_embedding.reshape(1, 1, self.embedding_dim).expand(batch_size, 1, self.embedding_dim),
-                    embedded_message,
-                ],
-                dim=1,
-            )
-            num_steps = total_length + 1
-        else:
-            num_steps = total_length
+        embedded_message = self._embed_message(message)
 
         object_logits_list: list[Tensor] = []
         symbol_logits_list: list[Tensor] = []
@@ -101,19 +125,9 @@ class RnnReceiverBase(ReceiverBase):
 
         h_dropout_mask = self.dropout.forward(torch.ones_like(h))
 
-        for step in range(num_steps):
-            if isinstance(self.cell, LSTMCell):
-                next_h, c = self.cell.forward(embedded_message[:, step], (h, c))
-            else:
-                next_h = self.cell.forward(embedded_message[:, step], h)
-
-            next_h = next_h * h_dropout_mask
-            if self.enable_residual_connection:
-                next_h = next_h + h
-            h = self.layer_norm.forward(next_h)
-
+        for step in range(embedded_message.shape[1]):
+            h, c = self._step_hidden_state(embedded_message[:, step], h, c, h_dropout_mask)
             object_logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
-
             if self.symbol_predictor is not None:
                 symbol_logits_list.append(self.symbol_predictor.forward(h))
 
@@ -140,6 +154,86 @@ class RnnReceiverBase(ReceiverBase):
             all_logits=all_object_logits,
             message_prior_output=message_prior_output,
         )
+
+    def compute_incrementality_loss(
+        self,
+        batch_size: int,
+        max_len: int,
+        fix_message_length: bool,
+        device: torch.device,
+        candidates: Optional[Tensor] = None,
+        update_object_predictor: bool = True,
+        update_symbol_predictor: bool = False,
+        temperature_parameter: float = 0,
+    ) -> Tensor:
+        assert self.bos_embedding is not None and self.symbol_predictor is not None
+
+        h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
+        c = torch.zeros_like(h)
+        e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
+
+        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
+        e_dropout_mask = self.dropout.forward(torch.ones_like(e))
+
+        e = e * e_dropout_mask
+
+        symbol_list: list[Tensor] = []
+        symbol_logits_list: list[Tensor] = []
+        object_logits_list: list[Tensor] = []
+
+        num_steps = max_len if fix_message_length else (max_len - 1)
+
+        for _ in range(num_steps):
+            h, c = self._step_hidden_state(e, h, c, h_dropout_mask)
+            step_logits = self.symbol_predictor.forward(h)
+            s = Categorical(logits=step_logits).sample() if self.training else step_logits.argmax(dim=-1)
+            e = self.symbol_embedding.forward(s) * e_dropout_mask
+
+            symbol_list.append(s)
+            symbol_logits_list.append(step_logits)
+            object_logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
+
+        message = torch.stack(symbol_list, dim=1)
+        symbol_logits = torch.stack(symbol_logits_list, dim=1)
+        object_logits = torch.stack(object_logits_list, dim=1)
+
+        if fix_message_length:
+            message_mask = torch.ones_like(message, dtype=torch.float)
+        else:
+            message = torch.cat([message, torch.zeros_like(message[:, -1:])], dim=1)
+            symbol_logits = torch.cat([symbol_logits, torch.zeros_like(symbol_logits[:, -1:])], dim=1)
+            is_eos = (message == 0).long()
+            message_mask = ((is_eos.cumsum(dim=-1) - is_eos) == 0).float()
+
+        message_log_probs = (
+            F.cross_entropy(
+                input=symbol_logits.permute(0, 2, 1),
+                target=message,
+                reduction="none",
+            ).neg()
+            * message_mask
+        )
+
+        object_log_softmax = object_logits.log_softmax(dim=2)
+        object_kl_divs = (
+            object_log_softmax[:, 1:].exp() * (object_log_softmax[:, 1:] - object_log_softmax[:, :-1])
+        ).sum(dim=2) * message_mask
+
+        loss = torch.zeros((), device=device)
+
+        if update_object_predictor:
+            loss = loss + object_kl_divs.sum(dim=1)
+        if update_symbol_predictor:
+            neg_rewards = (object_kl_divs + temperature_parameter * message_log_probs).detach()
+            neg_returns = neg_rewards + torch.sum(neg_rewards, dim=1, keepdim=True) - torch.cumsum(neg_rewards, dim=1)
+            loss = (
+                loss
+                + (neg_returns - neg_returns.mean(dim=0, keepdim=True))
+                / neg_returns.std(dim=0, unbiased=False, keepdim=True)
+                * message_log_probs
+            )
+
+        return loss
 
     def forward_gumbel_softmax(
         self,
