@@ -102,20 +102,15 @@ class RnnReceiverBase(ReceiverBase):
         h_dropout_mask = self.dropout.forward(torch.ones_like(h))
 
         for step in range(num_steps):
-            not_ended = (step < message_length).unsqueeze(1).float()
-
             if isinstance(self.cell, LSTMCell):
-                next_h, next_c = self.cell.forward(embedded_message[:, step], (h, c))
-                c = not_ended * next_c + (1 - not_ended) * c
+                next_h, c = self.cell.forward(embedded_message[:, step], (h, c))
             else:
                 next_h = self.cell.forward(embedded_message[:, step], h)
 
             next_h = next_h * h_dropout_mask
             if self.enable_residual_connection:
                 next_h = next_h + h
-            next_h = self.layer_norm.forward(next_h)
-
-            h = not_ended * next_h + (1 - not_ended) * h
+            h = self.layer_norm.forward(next_h)
 
             object_logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
 
