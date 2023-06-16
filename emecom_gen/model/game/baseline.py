@@ -95,9 +95,9 @@ class InputDependentBaseline(Module):
         h = encoder_hidden_state
 
         if sender_index is not None:
-            h = h + self.sender_index_to_hidden_state[sender_index].unsqueeze(0)
+            h = h + self.sender_index_to_hidden_state[str(sender_index)].unsqueeze(0)
         if receiver_index is not None:
-            h = h + self.receiver_index_to_hidden_state[receiver_index].unsqueeze(0)
+            h = h + self.receiver_index_to_hidden_state[str(receiver_index)].unsqueeze(0)
 
         c = torch.zeros_like(h)
         e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
