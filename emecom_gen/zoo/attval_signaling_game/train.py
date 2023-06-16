@@ -208,7 +208,11 @@ def main():
     match args.baseline_type:
         case "input-dependent":
             baseline = InputDependentBaseline(
-                object_encoder=Linear(args.n_attributes * args.n_values, args.sender_hidden_size),
+                object_encoder=AttributeValueEncoder(
+                    n_attributes=args.n_attributes,
+                    n_values=args.n_values,
+                    hidden_size=args.sender_hidden_size,
+                ),
                 vocab_size=args.vocab_size,
                 cell_type=args.sender_cell_type,
                 embedding_dim=args.sender_embedding_dim,
