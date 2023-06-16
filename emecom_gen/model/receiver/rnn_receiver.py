@@ -167,6 +167,7 @@ class RnnReceiverBase(ReceiverBase):
         temperature_parameter: float = 0,
     ) -> Tensor:
         assert self.bos_embedding is not None and self.symbol_predictor is not None
+        assert max_len > 1
 
         h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
         c = torch.zeros_like(h)
@@ -181,12 +182,17 @@ class RnnReceiverBase(ReceiverBase):
         symbol_logits_list: list[Tensor] = []
         object_logits_list: list[Tensor] = []
 
-        num_steps = max_len if fix_message_length else (max_len - 1)
-
-        for _ in range(num_steps):
+        for step in range(max_len):
             h, c = self._step_hidden_state(e, h, c, h_dropout_mask)
             step_logits = self.symbol_predictor.forward(h)
-            s = Categorical(logits=step_logits).sample() if self.training else step_logits.argmax(dim=-1)
+
+            if not fix_message_length and step == max_len - 1:
+                s = torch.zeros(size=(batch_size,), device=device, dtype=torch.long)
+            if self.training:
+                s = Categorical(logits=step_logits).sample()
+            else:
+                s = step_logits.argmax(dim=-1)
+
             e = self.symbol_embedding.forward(s) * e_dropout_mask
 
             symbol_list.append(s)
@@ -200,8 +206,6 @@ class RnnReceiverBase(ReceiverBase):
         if fix_message_length:
             message_mask = torch.ones_like(message, dtype=torch.float)
         else:
-            message = torch.cat([message, torch.zeros_like(message[:, -1:])], dim=1)
-            symbol_logits = torch.cat([symbol_logits, torch.zeros_like(symbol_logits[:, -1:])], dim=1)
             is_eos = (message == 0).long()
             message_mask = ((is_eos.cumsum(dim=-1) - is_eos) == 0).float()
 
@@ -217,7 +221,7 @@ class RnnReceiverBase(ReceiverBase):
         object_log_softmax = object_logits.log_softmax(dim=2)
         object_kl_divs = (
             object_log_softmax[:, 1:].exp() * (object_log_softmax[:, 1:] - object_log_softmax[:, :-1])
-        ).sum(dim=2) * message_mask
+        ).sum(dim=2) * message_mask[:, 1:]
 
         loss = torch.zeros((), device=device)
 
