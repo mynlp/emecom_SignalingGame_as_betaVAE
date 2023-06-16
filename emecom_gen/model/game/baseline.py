@@ -16,7 +16,6 @@ from typing import Literal, Callable, Optional
 import torch
 
 from ...data import Batch
-from ..sender import SenderOutput
 
 
 class InputDependentBaseline(Module):
@@ -71,7 +70,7 @@ class InputDependentBaseline(Module):
         message: Tensor,
         sender_index: Optional[int] = None,
         receiver_index: Optional[int] = None,
-    ) -> SenderOutput:
+    ) -> Tensor:
         return self.forward(
             batch,
             message,
@@ -85,7 +84,7 @@ class InputDependentBaseline(Module):
         message: Tensor,
         sender_index: Optional[int] = None,
         receiver_index: Optional[int] = None,
-    ) -> SenderOutput:
+    ) -> Tensor:
         input = batch.input
         batch_size = input.shape[0]
 
