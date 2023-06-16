@@ -9,7 +9,7 @@ from torch.nn import (
     LayerNorm,
     Identity,
     Dropout,
-    ModuleDict,
+    ParameterDict,
 )
 from torch import Tensor
 from typing import Literal, Callable, Optional
@@ -45,10 +45,10 @@ class InputDependentBaseline(Module):
         self.bos_embedding = Parameter(torch.zeros(embedding_dim))
         self.value_estimator = Linear(hidden_size, 1)
 
-        self.sender_index_to_hidden_state = ModuleDict(
+        self.sender_index_to_hidden_state = ParameterDict(
             {str(i): Parameter(torch.zeros(hidden_size)) for i in range(num_senders)}
         )
-        self.receiver_index_to_hidden_state = ModuleDict(
+        self.receiver_index_to_hidden_state = ParameterDict(
             {str(i): Parameter(torch.zeros(hidden_size)) for i in range(num_receivers)}
         )
 
