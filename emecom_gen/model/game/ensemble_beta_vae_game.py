@@ -127,7 +127,12 @@ class EnsembleBetaVAEGame(GameBase):
                 baseline = torch.as_tensor(0, dtype=torch.float, device=self.device)
             case b:
                 assert isinstance(b, InputDependentBaseline)
-                baseline = b.forward(batch.input, sender_idx=sender_index, receiver_idx=receiver_index) * mask
+                baseline = b.forward(
+                    batch=batch,
+                    message=output_s.message,
+                    sender_index=sender_index,
+                    receiver_index=receiver_index,
+                )
 
         match self.reward_normalization_type:
             case "none":
