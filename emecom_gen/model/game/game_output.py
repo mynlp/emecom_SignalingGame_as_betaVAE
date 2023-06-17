@@ -16,6 +16,18 @@ class GameOutput:
     receiver_output: Optional[ReceiverOutput] = None
     message_prior_output: Optional[MessagePriorOutput] = None
 
+    def __post_init__(self):
+        nans: list[str] = []
+        if self.loss.isnan().any().item():
+            nans.append("self.loss")
+        if self.communication_loss.isnan().any().item():
+            nans.append("self.communication_loss")
+        if self.sender_output is not None and self.sender_output.message_log_probs.isnan().any().item():
+            nans.append("self.sender_output.message_log_probs")
+        if self.message_prior_output is not None and self.message_prior_output.message_log_probs.isnan().any().item():
+            nans.append("self.message_prior_output.message_log_probs")
+        assert len(nans) == 0, f"NaN values found in: {nans}"
+
     def make_log_dict(
         self,
         prefix: str = "",
