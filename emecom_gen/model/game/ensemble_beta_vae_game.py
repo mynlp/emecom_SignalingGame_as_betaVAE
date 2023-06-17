@@ -37,7 +37,6 @@ class EnsembleBetaVAEGame(GameBase):
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
         gumbel_softmax_mode: bool = False,
-        receiver_impatience: bool = False,
         receiver_incrementality: bool = False,
         accumulate_grad_batches: int = 1,
     ) -> None:
@@ -61,7 +60,6 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.beta_scheduler = beta_scheduler
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
-        self.receiver_impatience = receiver_impatience
         self.receiver_incrementality = receiver_incrementality
 
     def forward(
@@ -160,10 +158,6 @@ class EnsembleBetaVAEGame(GameBase):
             + ((loss_s - baseline.detach()) * mask * output_s.message_log_probs / denominator).sum(dim=-1)
             + ((loss_s - baseline).square() * mask).sum(dim=-1)
         )
-
-        if self.receiver_impatience:
-            impatient_loss = (communication_loss * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-            surrogate_loss = surrogate_loss + impatient_loss
 
         if self.receiver_incrementality:
             assert prior == "receiver"

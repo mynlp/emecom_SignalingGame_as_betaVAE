@@ -21,7 +21,7 @@ class RnnReceiverBase(ReceiverBase):
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
-        enable_object_logits_cumsum: bool = False,
+        enable_impatience: bool = False,
         dropout: float = 0,
     ) -> None:
         super().__init__()
@@ -36,7 +36,7 @@ class RnnReceiverBase(ReceiverBase):
             self.layer_norm = Identity()
 
         self.enable_residual_connection = enable_residual_connection
-        self.enable_object_logits_cumsum = enable_object_logits_cumsum
+        self.enable_impatience = enable_impatience
         self.dropout = Dropout(dropout)
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
@@ -145,8 +145,10 @@ class RnnReceiverBase(ReceiverBase):
             message_prior_output = None
 
         all_object_logits = torch.stack(object_logits_list, dim=1)
-        if self.enable_object_logits_cumsum:
-            all_object_logits = all_object_logits.cumsum(dim=1)
+        if self.enable_impatience:
+            all_object_logits = all_object_logits.cumsum(dim=1) / (
+                torch.arange(1, all_object_logits.shape[1] + 1, device=device).reshape(1, -1, 1)
+            )
         last_object_logits = all_object_logits[torch.arange(batch_size), message_length - 1]
 
         return ReceiverOutput(
@@ -299,7 +301,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
-        enable_object_logits_cumsum: bool = False,
+        enable_impatience: bool = False,
         dropout: float = 0,
     ) -> None:
         super().__init__(
@@ -310,7 +312,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
             enable_symbol_prediction=enable_symbol_prediction,
-            enable_object_logits_cumsum=enable_object_logits_cumsum,
+            enable_impatience=enable_impatience,
             dropout=dropout,
         )
 
@@ -335,7 +337,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
-        enable_object_logits_cumsum: bool = False,
+        enable_impatience: bool = False,
         dropout: float = 0,
     ) -> None:
         super().__init__(
@@ -346,7 +348,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
             enable_symbol_prediction=enable_symbol_prediction,
-            enable_object_logits_cumsum=enable_object_logits_cumsum,
+            enable_impatience=enable_impatience,
             dropout=dropout,
         )
 

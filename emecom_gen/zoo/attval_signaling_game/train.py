@@ -160,7 +160,7 @@ def main():
             enable_layer_norm=args.receiver_layer_norm,
             enable_residual_connection=args.receiver_residual_connection,
             enable_symbol_prediction=(args.prior_type == "receiver"),
-            enable_object_logits_cumsum=args.receiver_object_logits_cumsum,
+            enable_impatience=args.receiver_impatience,
             dropout=args.receiver_dropout,
         )
         for _ in range(args.n_agent_pairs)
@@ -258,7 +258,6 @@ def main():
         receiver_update_prob=args.receiver_update_prob,
         prior_update_prob=args.prior_update_prob,
         gumbel_softmax_mode=args.gumbel_softmax_mode,
-        receiver_impatience=args.receiver_impatience,
         receiver_incrementality=args.receiver_incrementality,
         accumulate_grad_batches=args.accumulate_grad_batches,
     )

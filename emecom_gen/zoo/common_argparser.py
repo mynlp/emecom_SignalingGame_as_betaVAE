@@ -32,7 +32,6 @@ class CommonArgumentParser(Tap):
     receiver_incrementality: bool = False  # Wether to enable receiver's incrementality.
     receiver_layer_norm: bool = False  # Wether to enable receiver's LayerNorm.
     receiver_residual_connection: bool = False  # Wether to enable receiver's residual connection.
-    receiver_object_logits_cumsum: bool = False  # Whether to enable receiver's object logits cumsum.
     receiver_lr: float = 1e-4  # Receiver's learning rate.
     receiver_weight_decay: float = 0  # Receiver's weight decay.
     receiver_dropout: float = 0  # Receiver's dropout p.
