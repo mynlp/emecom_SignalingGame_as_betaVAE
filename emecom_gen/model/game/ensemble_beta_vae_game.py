@@ -106,7 +106,7 @@ class EnsembleBetaVAEGame(GameBase):
             target=batch.target_label,
             reduction="none",
         )
-        while communication_loss.dim() > 2:
+        while communication_loss.dim() > 1:
             communication_loss = communication_loss.sum(dim=-1)
 
         loss_s = (
