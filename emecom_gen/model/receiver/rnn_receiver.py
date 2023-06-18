@@ -133,8 +133,8 @@ class RnnReceiverBase(ReceiverBase):
         hidden_states = self._compute_hidden_states(message)
 
         if self.bos_embedding is not None and self.symbol_predictor is not None:
-            hidden_states_for_object_prediction = hidden_states[1:]  # the first object logits is not necessary
-            hidden_states_for_symbol_prediction = hidden_states[:-1]  # the last symbol logits is not necessary
+            hidden_states_for_object_prediction = hidden_states[:, 1:]  # the first object logits is not necessary
+            hidden_states_for_symbol_prediction = hidden_states[:, :-1]  # the last symbol logits is not necessary
 
             message_prior_output = MessagePriorOutput(
                 message_log_probs=F.cross_entropy(
