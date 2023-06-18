@@ -165,7 +165,7 @@ class RnnReceiverBase(ReceiverBase):
                 torch.arange(hidden_states_for_object_prediction.shape[0]), message_length - 1
             ],
             candidates=candidates,
-        ).reshape(*hidden_states_for_object_prediction.shape[0:-2], -1)
+        )
 
         return ReceiverOutput(
             last_logits=last_logits,
