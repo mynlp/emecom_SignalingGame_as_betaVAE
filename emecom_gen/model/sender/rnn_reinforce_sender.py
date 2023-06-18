@@ -111,7 +111,8 @@ class RnnReinforceSender(SenderBase):
         forced_message: Optional[Tensor] = None,
     ) -> SenderOutput:
         if not self.training and forced_message is None:
-            self._beam_search(batch)
+            topk_messages, _ = self._beam_search(batch)
+            forced_message = topk_messages[:, 0]
 
         input = batch.input
         batch_size = input.shape[0]
@@ -291,14 +292,17 @@ class RnnReinforceSender(SenderBase):
             c = c.reshape(batch_size, beam_size, -1)
 
             # Once EOS is sampled, it is sampled with probability 1 in later steps.
-            logits_mask_for_finished_decoding = torch.zeros(
-                size=(batch_size, beam_size, self.vocab_size),
-                dtype=torch.float,
-                device=device,
-            )
-            logits_mask_for_finished_decoding[:, :, 1:] = torch.where(
-                (topk_histories == 0).any(dim=2, keepdim=True), torch.finfo(torch.float).min, 0
-            ).expand(batch_size, beam_size, self.vocab_size - 1)
+            if self.fix_message_length:
+                logits_mask_for_finished_decoding = 0
+            else:
+                logits_mask_for_finished_decoding = torch.zeros(
+                    size=(batch_size, beam_size, self.vocab_size),
+                    dtype=torch.float,
+                    device=device,
+                )
+                logits_mask_for_finished_decoding[:, :, 1:] = torch.where(
+                    (topk_histories == 0).any(dim=2, keepdim=True), torch.finfo(torch.float).min, 0
+                ).expand(batch_size, beam_size, self.vocab_size - 1)
 
             # output_log_prob_score: size (batch_size, beam_size, vocab_size)
             output_log_prob_score = (
