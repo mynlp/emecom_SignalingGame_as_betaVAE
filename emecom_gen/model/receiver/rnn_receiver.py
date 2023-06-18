@@ -106,54 +106,69 @@ class RnnReceiverBase(ReceiverBase):
 
         return next_h, next_c
 
+    def _compute_hidden_states(
+        self,
+        message: Tensor,
+    ):
+        embedded_message = self._embed_message(message)
+
+        h = torch.zeros(size=(message.shape[0], self.hidden_size), device=message.device)
+        c = torch.zeros_like(h)
+
+        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
+
+        hidden_state_list: list[Tensor] = []
+        for step in range(embedded_message.shape[1]):
+            h, c = self._step_hidden_state(embedded_message[:, step], h, c, h_dropout_mask)
+            hidden_state_list.append(h)
+
+        return torch.stack(hidden_state_list, dim=1)
+
     def forward(
         self,
         message: Tensor,
         message_length: Tensor,
         candidates: Optional[Tensor] = None,
     ):
-        batch_size = message.shape[0]
-        device = message.device
+        hidden_states = self._compute_hidden_states(message)
 
-        embedded_message = self._embed_message(message)
+        if self.bos_embedding is not None and self.symbol_predictor is not None:
+            hidden_states_for_object_prediction = hidden_states[1:]  # the first object logits is not necessary
+            hidden_states_for_symbol_prediction = hidden_states[:-1]  # the last symbol logits is not necessary
 
-        object_logits_list: list[Tensor] = []
-        symbol_logits_list: list[Tensor] = []
-
-        h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
-        c = torch.zeros_like(h)
-
-        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
-
-        for step in range(embedded_message.shape[1]):
-            h, c = self._step_hidden_state(embedded_message[:, step], h, c, h_dropout_mask)
-            object_logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
-            if self.symbol_predictor is not None:
-                symbol_logits_list.append(self.symbol_predictor.forward(h))
-
-        if self.bos_embedding is not None:
-            object_logits_list.pop(0)  # the first object logits is not necessary
-            symbol_logits_list.pop(-1)  # the last symbol logits is not necessary
-
-            message_log_probs = F.cross_entropy(
-                input=torch.stack(symbol_logits_list, dim=2),  # (batch, vocab_size, seq_len)
-                target=message,  # (batch, seq_len)
-                reduction="none",
-            ).neg()
-            message_prior_output = MessagePriorOutput(message_log_probs)
+            message_prior_output = MessagePriorOutput(
+                message_log_probs=F.cross_entropy(
+                    input=self.symbol_predictor.forward(
+                        hidden_states_for_symbol_prediction,
+                    ).permute(
+                        0, 2, 1
+                    ),  # (batch, vocab_size, seq_len)
+                    target=message,  # (batch, seq_len)
+                    reduction="none",
+                ).neg()
+            )
         else:
+            hidden_states_for_object_prediction = hidden_states
             message_prior_output = None
 
-        all_object_logits = torch.stack(object_logits_list, dim=1)
         if self.enable_impatience:
-            all_object_logits = all_object_logits.cumsum(dim=1) / (
-                torch.arange(1, all_object_logits.shape[1] + 1, device=device).reshape(1, -1, 1)
+            hidden_states_for_object_prediction = hidden_states_for_object_prediction.cumsum(dim=1) / (
+                torch.arange(
+                    1,
+                    hidden_states_for_object_prediction.shape[1] + 1,
+                    device=message.device,
+                ).reshape(1, -1, 1)
             )
-        last_object_logits = all_object_logits[torch.arange(batch_size), message_length - 1]
+
+        object_logits = self._compute_logits_from_hidden_state(
+            hidden_state=hidden_states_for_object_prediction.flatten(0, -2),
+            candidates=candidates,
+        ).reshape(*hidden_states_for_object_prediction.shape[0:-2], -1)
+        last_object_logits = object_logits[torch.arange(object_logits.shape[0]), message_length - 1]
 
         return ReceiverOutput(
             last_logits=last_object_logits,
-            all_logits=all_object_logits,
+            all_logits=object_logits,
             message_prior_output=message_prior_output,
         )
 
