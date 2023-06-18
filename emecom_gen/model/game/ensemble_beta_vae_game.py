@@ -102,19 +102,15 @@ class EnsembleBetaVAEGame(GameBase):
         beta = self.beta_scheduler.forward(self.batch_step, acc=acc)
 
         communication_loss = F.cross_entropy(
-            input=output_r.all_logits.permute(0, -1, *tuple(range(1, output_r.all_logits.dim() - 1))),
-            target=batch.target_label.unsqueeze(1).expand(
-                batch.target_label.shape[0], output_r.all_logits.shape[1], *batch.target_label.shape[1:]
-            ),
+            input=output_r.last_logits.permute(0, -1, *tuple(range(1, output_r.last_logits.dim() - 1))),
+            target=batch.target_label,
             reduction="none",
         )
         while communication_loss.dim() > 2:
             communication_loss = communication_loss.sum(dim=-1)
 
-        last_communication_loss = communication_loss[torch.arange(batch.batch_size), output_s.message_length - 1]
-
         loss_s = (
-            last_communication_loss.detach().unsqueeze(1)
+            communication_loss.detach().unsqueeze(1)
             + inversed_cumsum((output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask, dim=1)
             * beta
             / self.n_agent_pairs
@@ -149,7 +145,7 @@ class EnsembleBetaVAEGame(GameBase):
                     .clamp(min=1e-8)
                 )
 
-        loss_r = last_communication_loss
+        loss_r = communication_loss
         loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta / self.n_agent_pairs
 
         surrogate_loss = (
@@ -171,7 +167,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         return GameOutput(
             loss=surrogate_loss,
-            communication_loss=last_communication_loss,
+            communication_loss=communication_loss,
             acc=acc,
             sender_output=output_s,
             receiver_output=output_r,
