@@ -75,12 +75,13 @@ class RnnReceiverBase(ReceiverBase):
         self,
         x: Tensor,
     ):
+        ones_like_x = torch.ones_like(x)
         match self.dropout_type:
             case "bernoulli":
-                mask = F.dropout(x, self.dropout_p, training=self.training)
+                mask = F.dropout(ones_like_x, self.dropout_p, training=self.training)
             case "gaussian":
                 epsilon = torch.randn_like(x) if self.training else 0
-                mask = torch.ones_like(x) + epsilon * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
+                mask = ones_like_x + epsilon * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
         return mask
 
     def _embed_message(
