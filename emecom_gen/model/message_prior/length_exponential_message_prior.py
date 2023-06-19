@@ -49,7 +49,10 @@ class LengthExponentialMessagePrior(MessagePriorBase):
     ):
         return MessagePriorOutput(
             message_log_probs=F.cross_entropy(
-                input=self.symbol_log_probs.unsqueeze(0).expand_as(message).to(message.device).permute(0, 2, 1),
+                input=self.symbol_log_probs.unsqueeze(0)
+                .expand(message.shape[0], *self.symbol_log_probs.shape)
+                .to(message.device)
+                .permute(0, 2, 1),
                 target=message,
                 reduction="none",
             ).neg()
