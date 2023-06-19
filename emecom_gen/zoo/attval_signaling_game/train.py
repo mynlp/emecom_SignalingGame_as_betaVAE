@@ -238,7 +238,7 @@ def main():
                 num_receivers=args.n_agent_pairs,
                 enable_layer_norm=args.sender_layer_norm,
                 enable_residual_connection=args.sender_residual_connection,
-                dropout=args.sender_dropout,
+                dropout=args.sender_dropout_p,
             )
         case literal:
             baseline = literal
