@@ -133,12 +133,13 @@ class RnnReinforceSender(SenderBase):
         logits_list: list[Tensor] = []
         estimated_value_list: list[Tensor] = []
 
-        if forced_message is not None:
-            num_steps = forced_message.shape[1]
-        elif self.fix_message_length:
+        if forced_message is None:
             num_steps = self.max_len
         else:
-            num_steps = self.max_len - 1
+            num_steps = forced_message.shape[1]
+
+        if not self.fix_message_length:
+            num_steps -= 1
 
         for step in range(num_steps):
             h, c = self._step_hidden_state(e, h, c, h_dropout_mask)
