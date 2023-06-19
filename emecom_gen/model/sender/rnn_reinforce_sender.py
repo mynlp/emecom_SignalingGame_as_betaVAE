@@ -246,14 +246,11 @@ class RnnReinforceSender(SenderBase):
         beam_size: int = 3,
         temperature: float = 1,
     ):
-        batch_size = batch.input.shape[0]
-        device = batch.input.device
-
-        e = self.bos_embedding.reshape(1, 1, -1).expand(batch_size, beam_size, -1)
+        e = self.bos_embedding.reshape(1, 1, -1).expand(batch.batch_size, beam_size, -1)
         h = (
             self.layer_norm.forward(self.object_encoder(batch.input))
-            .reshape(batch_size, 1, -1)
-            .expand(batch_size, beam_size, -1)
+            .reshape(batch.batch_size, 1, -1)
+            .expand(batch.batch_size, beam_size, -1)
         )
         c = torch.zeros_like(h)
 
@@ -265,42 +262,42 @@ class RnnReinforceSender(SenderBase):
         # topk_log_prob_scores: size (batch_size, beam_size)
         # Initial state: topk_log_prob_scores[i, j] == 0 if j == 0 else float("-inf")
         topk_log_prob_scores: Tensor = torch.full(
-            size=(batch_size, beam_size),
+            size=(batch.batch_size, beam_size),
             fill_value=torch.finfo(torch.float).min,
             dtype=torch.float,
-            device=device,
+            device=batch.device,
         )
         topk_log_prob_scores[:, 0] = 0
         topk_histories: Tensor = torch.full(
-            size=(batch_size, beam_size, self.max_len),
+            size=(batch.batch_size, beam_size, self.max_len),
             fill_value=-1,
             dtype=torch.long,
-            device=device,
+            device=batch.device,
         )
 
         for step in range(num_steps):
-            e = e.reshape(batch_size * beam_size, -1)
-            h = h.reshape(batch_size * beam_size, -1)
-            c = c.reshape(batch_size * beam_size, -1)
+            e = e.reshape(batch.batch_size * beam_size, -1)
+            h = h.reshape(batch.batch_size * beam_size, -1)
+            c = c.reshape(batch.batch_size * beam_size, -1)
 
             h, c = self._step_hidden_state(e, h, c)
 
-            e = e.reshape(batch_size, beam_size, -1)
-            h = h.reshape(batch_size, beam_size, -1)
-            c = c.reshape(batch_size, beam_size, -1)
+            e = e.reshape(batch.batch_size, beam_size, -1)
+            h = h.reshape(batch.batch_size, beam_size, -1)
+            c = c.reshape(batch.batch_size, beam_size, -1)
 
             # Once EOS is sampled, it is sampled with probability 1 in later steps.
             if self.fix_message_length:
                 logits_mask_for_finished_decoding = 0
             else:
                 logits_mask_for_finished_decoding = torch.zeros(
-                    size=(batch_size, beam_size, self.vocab_size),
+                    size=(batch.batch_size, beam_size, self.vocab_size),
                     dtype=torch.float,
-                    device=device,
+                    device=batch.device,
                 )
                 logits_mask_for_finished_decoding[:, :, 1:] = torch.where(
                     (topk_histories == 0).any(dim=2, keepdim=True), torch.finfo(torch.float).min, 0
-                ).expand(batch_size, beam_size, self.vocab_size - 1)
+                ).expand(batch.batch_size, beam_size, self.vocab_size - 1)
 
             # output_log_prob_score: size (batch_size, beam_size, vocab_size)
             output_log_prob_score = (
@@ -309,8 +306,8 @@ class RnnReinforceSender(SenderBase):
 
             indices: Tensor  # type hinting
             topk_log_prob_scores, indices = torch.topk(
-                (output_log_prob_score + topk_log_prob_scores.reshape(batch_size, beam_size, 1)).reshape(
-                    batch_size, beam_size * self.vocab_size
+                (output_log_prob_score + topk_log_prob_scores.reshape(batch.batch_size, beam_size, 1)).reshape(
+                    batch.batch_size, beam_size * self.vocab_size
                 ),
                 k=beam_size,
                 dim=1,
@@ -325,18 +322,21 @@ class RnnReinforceSender(SenderBase):
             topk_histories = torch.gather(
                 topk_histories,
                 dim=1,
-                index=topk_history_indices.reshape(batch_size, beam_size, 1).expand(
-                    batch_size, beam_size, self.max_len
+                index=topk_history_indices.reshape(batch.batch_size, beam_size, 1).expand(
+                    batch.batch_size, beam_size, self.max_len
                 ),
             )
             topk_histories[:, :, step] = topk_outputs
 
             e = self.embedding.forward(topk_outputs)
-            h = torch.gather(h, dim=1, index=topk_history_indices.reshape(batch_size, beam_size, 1).expand(*h.shape))
-            c = torch.gather(c, dim=1, index=topk_history_indices.reshape(batch_size, beam_size, 1).expand(*c.shape))
+            h = torch.gather(
+                h, dim=1, index=topk_history_indices.reshape(batch.batch_size, beam_size, 1).expand(*h.shape)
+            )
+            c = torch.gather(
+                c, dim=1, index=topk_history_indices.reshape(batch.batch_size, beam_size, 1).expand(*c.shape)
+            )
 
         if not self.fix_message_length:
-            zeros = torch.zeros([batch_size, beam_size, 1], dtype=torch.long, device=device)
-            topk_histories = torch.cat([topk_histories, zeros], dim=2)
+            topk_histories[:, :, -1] = 0
 
         return topk_histories, topk_log_prob_scores
