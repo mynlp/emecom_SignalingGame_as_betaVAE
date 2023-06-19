@@ -62,26 +62,41 @@ class ArgumentParser(CommonArgumentParser):
                 f"H{self.sender_hidden_size}"
                 f"E{self.sender_embedding_dim}"
                 f"LN{self.sender_layer_norm}"
+                f"RC{self.sender_residual_connection}"
+                f"WD{self.sender_weight_decay}"
             )
+
             receiver_architecture_info = (
                 f"RCELL{self.receiver_cell_type}"
                 f"H{self.receiver_hidden_size}"
                 f"E{self.receiver_embedding_dim}"
                 f"LN{self.receiver_layer_norm}"
-                f"IMPA{self.receiver_impatience}"
+                f"RC{self.receiver_residual_connection}"
+                f"WD{self.receiver_weight_decay}"
+                f"IP{self.receiver_impatience}"
             )
+
+            prior_architecture_info = f"PRIOR{self.prior_type}"
+            match self.prior_type:
+                case "length-exponential":
+                    prior_architecture_info += f"B{self.length_exponential_prior_base}"
+                case "hmm":
+                    prior_architecture_info += f"H{self.hmm_prior_num_hidden_states}"
+                case _:
+                    pass
 
             self.experiment_version = delimiter.join(
                 [
                     f"FEATURE{self.n_features:0>4}",
                     f"VOC{self.vocab_size:0>4}",
                     f"LEN{self.max_len:0>4}",
+                    f"FIX{self.fix_message_length}",
                     f"POP{self.n_agent_pairs:0>4}",
-                    f"PRIOR{self.prior_type}",
                     beta_scheduler_info,
                     training_method_info,
                     sender_architecture_info,
                     receiver_architecture_info,
+                    prior_architecture_info,
                     f"SEED{self.random_seed:0>4}",
                 ]
             )
