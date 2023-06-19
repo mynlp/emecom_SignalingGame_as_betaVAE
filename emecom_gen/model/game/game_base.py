@@ -233,12 +233,8 @@ class GameBase(LightningModule):
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        streams: dict[tuple[int, int], torch.cuda.Stream] = {
-            k: torch.cuda.Stream() for k in itertools.product(range(len(self.senders)), range(len(self.receivers)))
-        }
-        torch.cuda.synchronize()
-        for (sender_idx, receiver_idx), stream in streams.items():
-            with torch.cuda.stream(stream):
+        for sender_idx in range(len(self.senders)):
+            for receiver_idx in range(len(self.receivers)):
                 game_output = self.forward(
                     batch,
                     sender_index=sender_idx,
@@ -251,7 +247,6 @@ class GameBase(LightningModule):
                     ),
                     batch_size=batch.batch_size,
                 )
-        torch.cuda.synchronize()
 
     def test_step(
         self,
