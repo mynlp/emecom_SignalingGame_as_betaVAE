@@ -1,4 +1,5 @@
 from torch import Tensor
+from torch.nn import functional as F
 import torch
 import math
 
@@ -47,13 +48,11 @@ class LengthExponentialMessagePrior(MessagePriorBase):
         message_length: Tensor,
     ):
         return MessagePriorOutput(
-            message_log_probs=torch.gather(
-                self.symbol_log_probs.unsqueeze(0)
-                .expand(message.shape[0], *self.symbol_log_probs.shape)
-                .to(message.device),
-                -1,
-                message.unsqueeze(-1).expand(*message.shape, self.symbol_log_probs.shape[-1]),
-            ).select(-1, 0)
+            message_log_probs=F.cross_entropy(
+                input=self.symbol_log_probs.unsqueeze(0).expand_as(message).to(message.device).permute(0, 2, 1),
+                target=message,
+                reduction="none",
+            ).neg()
         )
 
     def forward_gumbel_softmax(
