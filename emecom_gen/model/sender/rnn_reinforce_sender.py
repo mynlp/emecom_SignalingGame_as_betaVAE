@@ -309,7 +309,9 @@ class RnnReinforceSender(SenderBase):
 
             indices: Tensor  # type hinting
             topk_log_prob_scores, indices = torch.topk(
-                output_log_prob_score + topk_log_prob_scores.reshape(batch_size, beam_size, 1),
+                (output_log_prob_score + topk_log_prob_scores.reshape(batch_size, beam_size, 1)).reshape(
+                    batch_size, beam_size * self.vocab_size
+                ),
                 k=beam_size,
                 dim=1,
                 sorted=True,
