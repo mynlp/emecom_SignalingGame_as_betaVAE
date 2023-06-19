@@ -139,7 +139,8 @@ def main():
             fix_message_length=False,
             enable_layer_norm=args.sender_layer_norm,
             enable_residual_connection=args.sender_residual_connection,
-            dropout=args.sender_dropout,
+            dropout_p=args.sender_dropout_p,
+            dropout_type=args.sender_dropout_type,
         )
         for _ in range(args.n_agent_pairs)
     ]
@@ -158,7 +159,8 @@ def main():
             enable_residual_connection=args.receiver_residual_connection,
             enable_symbol_prediction=(args.prior_type == "receiver"),
             enable_impatience=args.receiver_impatience,
-            dropout=args.receiver_dropout,
+            dropout_p=args.receiver_dropout_p,
+            dropout_type=args.receiver_dropout_type,
         )
         for _ in range(args.n_agent_pairs)
     ]

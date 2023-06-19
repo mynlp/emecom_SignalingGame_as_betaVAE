@@ -22,7 +22,8 @@ class RnnReceiverBase(ReceiverBase):
         enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
         enable_impatience: bool = False,
-        dropout: float = 0,
+        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
+        dropout_p: float = 0,
     ) -> None:
         super().__init__()
 
@@ -37,7 +38,8 @@ class RnnReceiverBase(ReceiverBase):
 
         self.enable_residual_connection = enable_residual_connection
         self.enable_impatience = enable_impatience
-        self.dropout = Dropout(dropout)
+        self.dropout_p = dropout_p
+        self.dropout_type: Literal["bernoulli", "gaussian"] = dropout_type
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
@@ -69,6 +71,17 @@ class RnnReceiverBase(ReceiverBase):
     ) -> Tensor:
         raise NotImplementedError()
 
+    def _make_dropout_mask(
+        self,
+        x: Tensor,
+    ):
+        match self.dropout_type:
+            case "bernoulli":
+                mask = F.dropout(x, self.dropout_p, training=self.training)
+            case "gaussian":
+                mask = torch.ones_like(x) + torch.randn_like(x) * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
+        return mask
+
     def _embed_message(
         self,
         message: Tensor,
@@ -76,7 +89,7 @@ class RnnReceiverBase(ReceiverBase):
         batch_size = message.shape[0]
 
         embedded_message = self.symbol_embedding.forward(message)
-        embedded_message = embedded_message * self.dropout.forward(torch.ones_like(embedded_message[:, 0])).unsqueeze(1)
+        embedded_message = embedded_message * self._make_dropout_mask(embedded_message[:, 0]).unsqueeze(1)
 
         if self.bos_embedding is not None:
             embedded_message = torch.cat(
@@ -93,7 +106,6 @@ class RnnReceiverBase(ReceiverBase):
         h_dropout_mask: Tensor,
     ) -> tuple[Tensor, Tensor]:
         if isinstance(self.cell, LSTMCell):
-            assert c is not None
             next_h, next_c = self.cell.forward(e, (h, c))
         else:
             next_h = self.cell.forward(e, h)
@@ -115,7 +127,7 @@ class RnnReceiverBase(ReceiverBase):
         h = torch.zeros(size=(message.shape[0], self.hidden_size), device=message.device)
         c = torch.zeros_like(h)
 
-        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
+        h_dropout_mask = self._make_dropout_mask(h)
 
         hidden_state_list: list[Tensor] = []
         for step in range(embedded_message.shape[1]):
@@ -190,8 +202,8 @@ class RnnReceiverBase(ReceiverBase):
         c = torch.zeros_like(h)
         e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
-        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
-        e_dropout_mask = self.dropout.forward(torch.ones_like(e))
+        h_dropout_mask = self._make_dropout_mask(h)
+        e_dropout_mask = self._make_dropout_mask(e)
 
         e = e * e_dropout_mask
 
@@ -317,7 +329,8 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
         enable_impatience: bool = False,
-        dropout: float = 0,
+        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
+        dropout_p: float = 0,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -328,7 +341,8 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             enable_residual_connection=enable_residual_connection,
             enable_symbol_prediction=enable_symbol_prediction,
             enable_impatience=enable_impatience,
-            dropout=dropout,
+            dropout_p=dropout_p,
+            dropout_type=dropout_type,
         )
 
         self.object_decoder = object_decoder
@@ -353,7 +367,8 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         enable_residual_connection: bool = False,
         enable_symbol_prediction: bool = False,
         enable_impatience: bool = False,
-        dropout: float = 0,
+        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
+        dropout_p: float = 0,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -364,7 +379,8 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             enable_residual_connection=enable_residual_connection,
             enable_symbol_prediction=enable_symbol_prediction,
             enable_impatience=enable_impatience,
-            dropout=dropout,
+            dropout_p=dropout_p,
+            dropout_type=dropout_type,
         )
 
         self.object_encoder = object_encoder

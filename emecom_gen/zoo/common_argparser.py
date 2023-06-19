@@ -23,7 +23,8 @@ class CommonArgumentParser(Tap):
     sender_residual_connection: bool = False  # Whether to enable sender's residual connection.
     sender_lr: float = 1e-4  # Sender's learning rate.
     sender_weight_decay: float = 0  # Sender's weight decay.
-    sender_dropout: float = 0  # Sender's dropout rate.
+    sender_dropout_p: float = 0  # Sender's dropout rate.
+    sender_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Sender's dropout type.
 
     receiver_embedding_dim: int = 10  # Receiver's embedding dim.
     receiver_hidden_size: int = 128  # Receiver's hidden size.
@@ -34,7 +35,8 @@ class CommonArgumentParser(Tap):
     receiver_residual_connection: bool = False  # Wether to enable receiver's residual connection.
     receiver_lr: float = 1e-4  # Receiver's learning rate.
     receiver_weight_decay: float = 0  # Receiver's weight decay.
-    receiver_dropout: float = 0  # Receiver's dropout p.
+    receiver_dropout_p: float = 0  # Receiver's dropout rate.
+    receiver_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Receiver's dropout type.
 
     sender_update_prob: float = 1
     receiver_update_prob: float = 1

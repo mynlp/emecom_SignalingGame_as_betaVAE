@@ -1,6 +1,6 @@
 from torch import Tensor
-from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, Linear, LayerNorm, Identity, Dropout
-from torch.nn.parameter import Parameter
+from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, Linear, LayerNorm, Identity, Parameter
+from torch.nn import functional as F
 from torch.distributions import RelaxedOneHotCategorical
 from torch.distributions import Categorical
 from typing import Callable, Literal, Optional
@@ -40,7 +40,8 @@ class RnnReinforceSender(SenderBase):
         gs_straight_through: bool = True,
         enable_layer_norm: bool = True,
         enable_residual_connection: bool = True,
-        dropout: float = 0,
+        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
+        dropout_p: float = 0,
     ) -> None:
         super().__init__()
 
@@ -67,7 +68,8 @@ class RnnReinforceSender(SenderBase):
             self.layer_norm = Identity()
 
         self.enable_residual_connection = enable_residual_connection
-        self.dropout = Dropout(p=dropout)
+        self.dropout_p = dropout_p
+        self.dropout_type: Literal["bernoulli", "gaussian"] = dropout_type
 
         self.reset_parameters()
 
@@ -83,6 +85,17 @@ class RnnReinforceSender(SenderBase):
             batch,
             forced_message=forced_message,
         )
+
+    def _make_dropout_mask(
+        self,
+        x: Tensor,
+    ):
+        match self.dropout_type:
+            case "bernoulli":
+                mask = F.dropout(x, self.dropout_p, training=self.training)
+            case "gaussian":
+                mask = torch.ones_like(x) + torch.randn_like(x) * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
+        return mask
 
     def _step_hidden_state(
         self,
@@ -123,8 +136,8 @@ class RnnReinforceSender(SenderBase):
         c = torch.zeros_like(h)
         e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
-        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
-        e_dropout_mask = self.dropout.forward(torch.ones_like(e))
+        h_dropout_mask = self._make_dropout_mask(h)
+        e_dropout_mask = self._make_dropout_mask(e)
 
         h = h * h_dropout_mask
         e = e * e_dropout_mask
