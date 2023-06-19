@@ -89,7 +89,7 @@ class RnnReinforceSender(SenderBase):
         e: Tensor,
         h: Tensor,
         c: Tensor,
-        h_dropout_mask: Tensor,
+        h_dropout_mask: Tensor | Literal[1] = 1,
     ) -> tuple[Tensor, Tensor]:
         if isinstance(self.cell, LSTMCell):
             assert c is not None
@@ -278,14 +278,12 @@ class RnnReinforceSender(SenderBase):
             device=device,
         )
 
-        h_dropout_mask = self.dropout.forward(torch.ones_like(h))
-
         for step in range(num_steps):
             e = e.reshape(batch_size * beam_size, -1)
             h = h.reshape(batch_size * beam_size, -1)
             c = c.reshape(batch_size * beam_size, -1)
 
-            h, c = self._step_hidden_state(e, h, c, h_dropout_mask)
+            h, c = self._step_hidden_state(e, h, c)
 
             e = e.reshape(batch_size, beam_size, -1)
             h = h.reshape(batch_size, beam_size, -1)
