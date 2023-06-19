@@ -94,7 +94,8 @@ class RnnReinforceSender(SenderBase):
             case "bernoulli":
                 mask = F.dropout(x, self.dropout_p, training=self.training)
             case "gaussian":
-                mask = torch.ones_like(x) + torch.randn_like(x) * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
+                epsilon = torch.randn_like(x) if self.training else 0
+                mask = torch.ones_like(x) + epsilon * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
         return mask
 
     def _step_hidden_state(
