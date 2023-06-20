@@ -124,9 +124,10 @@ class RnnReinforceSender(SenderBase):
         self,
         batch: Batch,
         forced_message: Optional[Tensor] = None,
+        beam_size: int = 1,
     ) -> SenderOutput:
-        if not self.training and forced_message is None:
-            topk_messages, _ = self._beam_search(batch)
+        if not self.training and forced_message is None and beam_size > 1:
+            topk_messages, _ = self._beam_search(batch, beam_size)
             forced_message = topk_messages[:, 0]
 
         input = batch.input
@@ -164,8 +165,10 @@ class RnnReinforceSender(SenderBase):
 
             if forced_message is not None:
                 symbol = forced_message[:, step]
-            else:
+            elif self.training:
                 symbol = Categorical(logits=step_logits).sample()
+            else:
+                symbol = step_logits.argmax(dim=-1)
 
             e = self.embedding.forward(symbol)
             e = e * e_dropout_mask
@@ -259,7 +262,7 @@ class RnnReinforceSender(SenderBase):
     def _beam_search(
         self,
         batch: Batch,
-        beam_size: int = 3,
+        beam_size: int,
         temperature: float = 1,
     ):
         e = self.bos_embedding.reshape(1, 1, -1).expand(batch.batch_size, beam_size, -1)
