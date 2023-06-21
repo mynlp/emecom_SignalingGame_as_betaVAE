@@ -1,4 +1,4 @@
-from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear, Identity, Dropout
+from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear, Identity
 from torch import Tensor
 from typing import Callable, Literal, Optional
 import torch
