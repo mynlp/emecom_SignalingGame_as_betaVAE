@@ -1,5 +1,4 @@
 from typing import Sequence, Optional, Literal
-from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
 from torch import Tensor, randint
 import torch
@@ -24,13 +23,15 @@ class MOEJointBetaVAEGame(GameBase):
         senders: Sequence[SenderBase],
         receivers: Sequence[ReceiverBase],
         priors: Sequence[MessagePriorBase | Literal["receiver"]],
-        lr: float = 0.0001,
-        weight_decay: float = 0,
+        sender_lr: float,
+        receiver_lr: float,
+        sender_weight_decay: float = 0,
+        receiver_weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
         baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline = "batch-mean",
         reward_normalization_type: Literal["none", "std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
-        num_warmup_steps: int = 100,
+        num_warmup_steps: int = 0,
         sender_update_prob: float = 1,
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
@@ -38,25 +39,26 @@ class MOEJointBetaVAEGame(GameBase):
         accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__(
-            lr=lr,
             senders=list(senders),
             receivers=list(receivers),
             priors=list(priors),
+            sender_lr=sender_lr,
+            receiver_lr=receiver_lr,
             baseline=baseline,
             optimizer_class=optimizer_class,
             num_warmup_steps=num_warmup_steps,
-            weight_decay=weight_decay,
+            sender_weight_decay=sender_weight_decay,
+            receiver_weight_decay=receiver_weight_decay,
+            sender_update_prob=sender_update_prob,
+            receiver_update_prob=receiver_update_prob,
+            prior_update_prob=prior_update_prob,
             gumbel_softmax_mode=gumbel_softmax_mode,
             accumulate_grad_batches=accumulate_grad_batches,
         )
         assert len(senders) == len(receivers)
 
-        self.cross_entropy_loss = CrossEntropyLoss(reduction="none")
         self.beta_scheduler = beta_scheduler
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
-        self.sender_update_prob = sender_update_prob
-        self.receiver_update_prob = receiver_update_prob
-        self.prior_update_prob = prior_update_prob
 
     def forward(
         self,
@@ -105,7 +107,7 @@ class MOEJointBetaVAEGame(GameBase):
             [receiver_output.last_logits.argmax(dim=-1) == batch.target_label for receiver_output in receiver_outputs],
             dim=1,
         ).long()
-        while matching_count.dim() > 2:
+        while matching_count.dim() > 1:
             matching_count = matching_count.sum(dim=-1)
         acc = (
             (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device)))
@@ -154,8 +156,14 @@ class MOEJointBetaVAEGame(GameBase):
                 raise NotImplementedError()
             case "none":
                 baseline = torch.as_tensor(0, dtype=torch.float, device=self.device)
-            case _:
-                raise NotImplementedError()
+            case b:
+                assert isinstance(b, InputDependentBaseline)
+                baseline = b.forward(
+                    batch=batch,
+                    message=sender_output.message,
+                    sender_index=sender_index,
+                    receiver_index=receiver_index,
+                )
 
         match self.reward_normalization_type:
             case "none":
@@ -170,18 +178,11 @@ class MOEJointBetaVAEGame(GameBase):
                     .clamp(min=1e-8)
                 )
 
-        update_s = torch.bernoulli(torch.as_tensor(self.sender_update_prob, dtype=torch.float, device=self.device))
-        update_r = torch.bernoulli(torch.as_tensor(self.receiver_update_prob, dtype=torch.float, device=self.device))
-        update_p = torch.bernoulli(torch.as_tensor(self.prior_update_prob, dtype=torch.float, device=self.device))
-
         surrogate_loss = (
-            loss_r * update_r
-            + loss_p * update_p
-            + (loss_s - baseline.detach())
-            * (mask * sender_output.message_log_probs).sum(dim=-1)
-            / denominator
-            * update_s
-            + ((loss_s - baseline).square() * mask).sum(dim=-1) * update_s
+            loss_r
+            + loss_p
+            + (loss_s - baseline.detach()) * (mask * sender_output.message_log_probs).sum(dim=-1) / denominator
+            + ((loss_s - baseline).square() * mask).sum(dim=-1)
         )
 
         return GameOutput(
