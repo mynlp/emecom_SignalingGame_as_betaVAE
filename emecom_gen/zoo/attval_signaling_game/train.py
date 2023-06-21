@@ -1,7 +1,6 @@
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
-from torch.nn import Linear
 from logzero import logger
 from typing import Sequence, Literal
 import json
@@ -24,7 +23,7 @@ from ...model.game import (
     AccuracyBasedBetaScheduler,
     InputDependentBaseline,
 )
-from ...metrics import TopographicSimilarity, DumpLanguage, HarrisSchemeBasedMetrics, SpeakersSynchronization
+from ...metrics import TopographicSimilarity, DumpLanguage, HarrisSchemeBasedMetrics, LanguageSimilarity
 from ..common_argparser import CommonArgumentParser
 from .additional_archs import AttributeValueEncoder, AttributeValueDecoder
 
@@ -33,8 +32,8 @@ class ArgumentParser(CommonArgumentParser):
     n_attributes: int = 2  # Number of attributes.
     n_values: int = 16  # Number of values.
     experiment_name: str = "attribute-value-signaling-game"  # Name of sub-directory of `save_dir`.
-    compute_topsim: bool = False
-    compute_speakers_synchronization: bool = False
+    compute_topsim: bool = True
+    compute_language_similarity: bool = True
     compute_harris_based_metrics: bool = False
 
     def process_args(self) -> None:
@@ -289,10 +288,16 @@ def main():
         )
 
     if args.compute_topsim:
-        callbacks.append(TopographicSimilarity())
+        if args.n_attributes > 1:
+            callbacks.append(TopographicSimilarity())
+        else:
+            logger.warning("`TopographicSimilarity()` is not applicable when `n_attributes==1.`")
 
-    if args.compute_speakers_synchronization:
-        callbacks.append(SpeakersSynchronization())
+    if args.compute_language_similarity:
+        if args.n_agent_pairs > 1:
+            callbacks.append(LanguageSimilarity())
+        else:
+            logger.warning("`LanguageSimilarity()` is not applicable when `n_agent_pairs==1.`")
 
     if args.compute_harris_based_metrics:
         callbacks.append(HarrisSchemeBasedMetrics())

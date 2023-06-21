@@ -11,11 +11,11 @@ from ..data import Batch
 from ..model.game import GameBase
 
 
-class SpeakersSynchronization(Callback):
+class LanguageSimilarity(Callback):
     def __init__(
         self,
-        metric_name_prefix: str = "sendersync",
-        num_message_samples: int = 10,
+        metric_name_prefix: str = "langsim",
+        num_message_samples: int = 50,
     ) -> None:
         super().__init__()
         self.metric_name_prefix = metric_name_prefix

@@ -1,7 +1,7 @@
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
-from typing import Literal, Callable, Sequence, Hashable, Optional, Any
+from typing import Literal, Callable, Sequence, Hashable, Optional, Any, TypeVar
 from scipy.spatial.distance import pdist
 from scipy.stats import spearmanr
 from collections import defaultdict
@@ -13,6 +13,33 @@ from ..data import Batch
 from ..model.game import GameBase
 
 
+T = TypeVar(name="T", bound=Hashable)
+
+
+def jaccard_distance(x: Sequence[T], y: Sequence[T]):
+    x_set, y_set = set(x), set(y)
+    if len(x_set) == len(y_set) == 0:
+        return 0
+    else:
+        return 1 - len(x_set & y_set) / len(x_set | y_set)
+
+
+def dice_distance(x: Sequence[T], y: Sequence[T]):
+    x_set, y_set = set(x), set(y)
+    if len(x_set) == len(y_set) == 0:
+        return 0
+    else:
+        return 1 - 2 * len(x_set & y_set) / (len(x_set) + len(y_set))
+
+
+def simpson_distance(x: Sequence[T], y: Sequence[T]):
+    x_set, y_set = set(x), set(y)
+    if len(x_set) == len(y_set) == 0:
+        return 0
+    else:
+        return 1 - 2 * len(x_set & y_set) / min(len(x_set), len(y_set))
+
+
 class TopographicSimilarity(Callback):
     def __init__(
         self,
@@ -20,7 +47,7 @@ class TopographicSimilarity(Callback):
         meaning_type: Literal["input", "target_label", "hidden_state"] = "target_label",
         meaning_distance_fn: Literal["hamming", "edit", "cosine", "euclidean"]
         | Callable[[Sequence[Hashable], Sequence[Hashable]], float | int] = "hamming",
-        message_distance_fn: Literal["hamming", "edit"]
+        message_distance_fn: Literal["hamming", "edit", "jaccard", "dice", "simpson"]
         | Callable[[Sequence[Hashable], Sequence[Hashable]], float | int] = "edit",
     ) -> None:
         super().__init__()
@@ -31,7 +58,7 @@ class TopographicSimilarity(Callback):
         self.meaning_distance_fn: Literal["hamming", "edit", "cosine", "euclidean"] | Callable[
             [Sequence[Hashable], Sequence[Hashable]], float | int
         ] = meaning_distance_fn
-        self.message_distance_fn: Literal["hamming", "edit"] | Callable[
+        self.message_distance_fn: Literal["hamming", "edit", "jaccard", "dice", "simpson"] | Callable[
             [Sequence[Hashable], Sequence[Hashable]], float | int
         ] = message_distance_fn
 
@@ -43,7 +70,8 @@ class TopographicSimilarity(Callback):
         message_lengths: Optional[Sequence[int]] = None,
         meaning_distance_fn: Literal["hamming", "edit", "cosine", "euclidean"]
         | Callable[[Any, Any], float | int] = "hamming",
-        message_distance_fn: Literal["hamming", "edit"] | Callable[[Any, Any], float | int] = "edit",
+        message_distance_fn: Literal["hamming", "edit", "jaccard", "dice", "simpson"]
+        | Callable[[Any, Any], float | int] = "edit",
     ):
         match meaning_distance_fn:
             case "edit":
@@ -56,21 +84,31 @@ class TopographicSimilarity(Callback):
                 raise ValueError(f"Unkown meaning distance fn `{unknown}`.")
 
         match message_distance_fn:
-            case "edit":  # `scipy.spatial.distance.pdist` does not support the variable-length case.
+            # `scipy.spatial.distance.pdist` does not support the variable-length case.
+            case metric if metric in ("edit", "jaccard", "dice", "simpson"):
+                match metric:
+                    case "edit":
+                        fn = editdistance.eval
+                    case "jaccard":
+                        fn = jaccard_distance
+                    case "dice":
+                        fn = dice_distance
+                    case "simpson":
+                        fn = simpson_distance
                 message_distances = [
-                    editdistance.eval(
+                    fn(
                         messages[i][: None if message_lengths is None else message_lengths[i]],
                         messages[j][: None if message_lengths is None else message_lengths[j]],
                     )
                     for i in range(len(messages))
                     for j in range(i + 1, len(messages))
                 ]
-            case metric if isinstance(metric, str):
+            case metric if metric in ("hamming",):
                 message_distances = pdist(messages, metric=metric)
             case fn if callable(fn):
                 message_distances = pdist(messages, metric=fn)
-            case unknown:
-                raise ValueError(f"Unkown meaning distance fn `{unknown}`.")
+            case _:
+                pass
 
         topsim = float(spearmanr(meaning_distances, message_distances, nan_policy="propagate").statistic)
 
