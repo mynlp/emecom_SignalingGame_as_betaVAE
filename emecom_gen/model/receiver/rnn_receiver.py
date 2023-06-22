@@ -71,18 +71,36 @@ class RnnReceiverBase(ReceiverBase):
     ) -> Tensor:
         raise NotImplementedError()
 
-    def _make_dropout_mask(
+    def _make_dropout_function(
         self,
         x: Tensor,
-    ):
+    ) -> Callable[[Tensor], Tensor]:
         ones_like_x = torch.ones_like(x)
         match self.dropout_type:
             case "bernoulli":
-                mask = F.dropout(ones_like_x, self.dropout_p, training=self.training)
+
+                def bernoulli_dropout(
+                    input: Tensor,
+                    mask: Tensor = F.dropout(
+                        ones_like_x,
+                        self.dropout_p,
+                        training=self.training,
+                    ),
+                ) -> Tensor:
+                    return input * mask
+
+                return bernoulli_dropout
+
             case "gaussian":
-                epsilon = torch.randn_like(x) if self.training else 0
-                mask = ones_like_x + epsilon * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
-        return mask
+
+                def gaussian_dropout(
+                    input: Tensor,
+                    scaled_eps: Tensor = ((self.dropout_p / (1 - self.dropout_p)) ** 0.5)
+                    * (torch.randn_like(x) if self.training else torch.zeros_like(x)),
+                ) -> Tensor:
+                    return input + (input.detach() * scaled_eps)
+
+                return gaussian_dropout
 
     def _embed_message(
         self,
@@ -91,7 +109,7 @@ class RnnReceiverBase(ReceiverBase):
         batch_size = message.shape[0]
 
         embedded_message = self.symbol_embedding.forward(message)
-        embedded_message = embedded_message * self._make_dropout_mask(embedded_message[:, 0]).unsqueeze(1)
+        embedded_message = self._make_dropout_function(embedded_message[:, :1])(embedded_message)
 
         if self.bos_embedding is not None:
             embedded_message = torch.cat(
@@ -105,7 +123,7 @@ class RnnReceiverBase(ReceiverBase):
         e: Tensor,
         h: Tensor,
         c: Tensor,
-        h_dropout_mask: Tensor,
+        h_dropout: Callable[[Tensor], Tensor] = lambda x: x,
     ) -> tuple[Tensor, Tensor]:
         if isinstance(self.cell, LSTMCell):
             next_h, next_c = self.cell.forward(e, (h, c))
@@ -113,7 +131,7 @@ class RnnReceiverBase(ReceiverBase):
             next_h = self.cell.forward(e, h)
             next_c = c
 
-        next_h = next_h * h_dropout_mask
+        next_h = h_dropout(next_h)
         if self.enable_residual_connection:
             next_h = next_h + h
         next_h = self.layer_norm.forward(next_h)
@@ -129,11 +147,11 @@ class RnnReceiverBase(ReceiverBase):
         h = torch.zeros(size=(message.shape[0], self.hidden_size), device=message.device)
         c = torch.zeros_like(h)
 
-        h_dropout_mask = self._make_dropout_mask(h)
+        h_dropout = self._make_dropout_function(h)
 
         hidden_state_list: list[Tensor] = []
         for step in range(embedded_message.shape[1]):
-            h, c = self._step_hidden_state(embedded_message[:, step], h, c, h_dropout_mask)
+            h, c = self._step_hidden_state(embedded_message[:, step], h, c, h_dropout)
             hidden_state_list.append(h)
 
         return torch.stack(hidden_state_list, dim=1)
@@ -204,17 +222,17 @@ class RnnReceiverBase(ReceiverBase):
         c = torch.zeros_like(h)
         e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
-        h_dropout_mask = self._make_dropout_mask(h)
-        e_dropout_mask = self._make_dropout_mask(e)
+        h_dropout = self._make_dropout_function(h)
+        e_dropout = self._make_dropout_function(e)
 
-        e = e * e_dropout_mask
+        e = e_dropout(e)
 
         symbol_list: list[Tensor] = []
         symbol_logits_list: list[Tensor] = []
         object_logits_list: list[Tensor] = []
 
         for step in range(max_len):
-            h, c = self._step_hidden_state(e, h, c, h_dropout_mask)
+            h, c = self._step_hidden_state(e, h, c, h_dropout)
             step_logits = self.symbol_predictor.forward(h)
 
             if not fix_message_length and step == max_len - 1:
@@ -224,7 +242,7 @@ class RnnReceiverBase(ReceiverBase):
             else:
                 s = step_logits.argmax(dim=-1)
 
-            e = self.symbol_embedding.forward(s) * e_dropout_mask
+            e = e_dropout(self.symbol_embedding.forward(s))
 
             symbol_list.append(s)
             symbol_logits_list.append(step_logits)

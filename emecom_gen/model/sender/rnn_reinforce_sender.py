@@ -86,25 +86,43 @@ class RnnReinforceSender(SenderBase):
             forced_message=forced_message,
         )
 
-    def _make_dropout_mask(
+    def _make_dropout_function(
         self,
         x: Tensor,
-    ):
+    ) -> Callable[[Tensor], Tensor]:
         ones_like_x = torch.ones_like(x)
         match self.dropout_type:
             case "bernoulli":
-                mask = F.dropout(ones_like_x, self.dropout_p, training=self.training)
+
+                def bernoulli_dropout(
+                    input: Tensor,
+                    mask: Tensor = F.dropout(
+                        ones_like_x,
+                        self.dropout_p,
+                        training=self.training,
+                    ),
+                ) -> Tensor:
+                    return input * mask
+
+                return bernoulli_dropout
+
             case "gaussian":
-                epsilon = torch.randn_like(x) if self.training else 0
-                mask = ones_like_x + epsilon * (self.dropout_p / (1 - self.dropout_p)) ** 0.5
-        return mask
+
+                def gaussian_dropout(
+                    input: Tensor,
+                    scaled_eps: Tensor = ((self.dropout_p / (1 - self.dropout_p)) ** 0.5)
+                    * (torch.randn_like(x) if self.training else torch.zeros_like(x)),
+                ) -> Tensor:
+                    return input + (input.detach() * scaled_eps)
+
+                return gaussian_dropout
 
     def _step_hidden_state(
         self,
         e: Tensor,
         h: Tensor,
         c: Tensor,
-        h_dropout_mask: Tensor | Literal[1] = 1,
+        h_dropout: Callable[[Tensor], Tensor] = lambda x: x,
     ) -> tuple[Tensor, Tensor]:
         if isinstance(self.cell, LSTMCell):
             assert c is not None
@@ -113,7 +131,7 @@ class RnnReinforceSender(SenderBase):
             next_h = self.cell.forward(e, h)
             next_c = c
 
-        next_h = next_h * h_dropout_mask
+        next_h = h_dropout(next_h)
         if self.enable_residual_connection:
             next_h = next_h + h
         next_h = self.layer_norm.forward(next_h)
@@ -139,11 +157,11 @@ class RnnReinforceSender(SenderBase):
         c = torch.zeros_like(h)
         e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
-        h_dropout_mask = self._make_dropout_mask(h)
-        e_dropout_mask = self._make_dropout_mask(e)
+        h_dropout = self._make_dropout_function(h)
+        e_dropout = self._make_dropout_function(e)
 
-        h = h * h_dropout_mask
-        e = e * e_dropout_mask
+        h = h_dropout(h)
+        e = e_dropout(e)
 
         symbol_list: list[Tensor] = []
         logits_list: list[Tensor] = []
@@ -158,7 +176,7 @@ class RnnReinforceSender(SenderBase):
             num_steps -= 1
 
         for step in range(num_steps):
-            h, c = self._step_hidden_state(e, h, c, h_dropout_mask)
+            h, c = self._step_hidden_state(e, h, c, h_dropout)
 
             step_logits = self.hidden_to_output.forward(h)
             step_estimated_value = self.value_estimator.forward(h)
@@ -170,8 +188,7 @@ class RnnReinforceSender(SenderBase):
             else:
                 symbol = step_logits.argmax(dim=-1)
 
-            e = self.embedding.forward(symbol)
-            e = e * e_dropout_mask
+            e = e_dropout(self.embedding.forward(symbol))
 
             symbol_list.append(symbol)
             logits_list.append(step_logits)
