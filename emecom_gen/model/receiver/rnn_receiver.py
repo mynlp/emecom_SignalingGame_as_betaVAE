@@ -204,11 +204,11 @@ class RnnReceiverBase(ReceiverBase):
 
             last_logits = (
                 logits_sequence.exp()
-                .mul(message_mask.unsqueeze(2))
+                .mul(message_mask.unsqueeze(-1))
                 .sum(dim=1)
-                .div(message_length)
+                .div(message_length.unsqueeze(-1))
                 .log()
-                .reshape(batch_size, seq_len, *logits_feature_dims)
+                .reshape(batch_size, *logits_feature_dims)
             )
         else:
             last_logits = self._compute_logits_from_hidden_state(
