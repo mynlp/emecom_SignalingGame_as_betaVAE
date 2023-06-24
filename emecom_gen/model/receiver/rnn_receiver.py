@@ -186,20 +186,26 @@ class RnnReceiverBase(ReceiverBase):
             message_prior_output = None
 
         if self.enable_impatience:
-            hidden_states_for_object_prediction = hidden_states_for_object_prediction.cumsum(dim=1) / (
-                torch.arange(
-                    1,
-                    hidden_states_for_object_prediction.shape[1] + 1,
-                    device=message.device,
-                ).reshape(1, -1, 1)
+            batch_size, seq_len = hidden_states_for_object_prediction.shape[:2]
+            last_logits = (
+                self._compute_logits_from_hidden_state(
+                    hidden_state=hidden_states_for_object_prediction.flatten(0, 1),
+                    candidates=None
+                    if candidates is None
+                    else candidates.unsqueeze(1)
+                    .expand(batch_size, seq_len, *candidates.shape[2:])
+                    .reshape(batch_size * seq_len, *candidates.shape[2:]),
+                )
+                .reshape(batch_size, seq_len, -1)
+                .logsumexp(dim=1)
             )
-
-        last_logits = self._compute_logits_from_hidden_state(
-            hidden_state=hidden_states_for_object_prediction[
-                torch.arange(hidden_states_for_object_prediction.shape[0]), message_length - 1
-            ],
-            candidates=candidates,
-        )
+        else:
+            last_logits = self._compute_logits_from_hidden_state(
+                hidden_state=hidden_states_for_object_prediction[
+                    torch.arange(hidden_states_for_object_prediction.shape[0]), message_length - 1
+                ],
+                candidates=candidates,
+            )
 
         return ReceiverOutput(
             last_logits=last_logits,
