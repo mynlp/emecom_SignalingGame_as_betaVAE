@@ -162,6 +162,7 @@ class RnnReceiverBase(ReceiverBase):
         self,
         message: Tensor,
         message_length: Tensor,
+        message_mask: Tensor,
         candidates: Optional[Tensor] = None,
     ):
         hidden_states = self._compute_hidden_states(message)
@@ -187,18 +188,18 @@ class RnnReceiverBase(ReceiverBase):
 
         if self.enable_impatience:
             batch_size, seq_len = hidden_states_for_object_prediction.shape[:2]
-            last_logits = (
-                self._compute_logits_from_hidden_state(
-                    hidden_state=hidden_states_for_object_prediction.flatten(0, 1),
-                    candidates=None
-                    if candidates is None
-                    else candidates.unsqueeze(1)
-                    .expand(batch_size, seq_len, *candidates.shape[2:])
-                    .reshape(batch_size * seq_len, *candidates.shape[2:]),
-                )
-                .reshape(batch_size, seq_len, -1)
-                .logsumexp(dim=1)
+            logits_sequence_flattened = self._compute_logits_from_hidden_state(
+                hidden_state=hidden_states_for_object_prediction.flatten(0, 1),
+                candidates=None
+                if candidates is None
+                else candidates.unsqueeze(1)
+                .expand(batch_size, seq_len, *candidates.shape[2:])
+                .reshape(batch_size * seq_len, *candidates.shape[2:]),
             )
+            logits_sequence = logits_sequence_flattened.reshape(
+                batch_size, seq_len, *logits_sequence_flattened.shape[1:]
+            )
+            last_logits = logits_sequence.exp().mul(message_mask).sum(dim=1).div(message_length).log()
         else:
             last_logits = self._compute_logits_from_hidden_state(
                 hidden_state=hidden_states_for_object_prediction[
