@@ -188,7 +188,8 @@ class RnnReceiverBase(ReceiverBase):
 
         if self.enable_impatience:
             batch_size, seq_len = hidden_states_for_object_prediction.shape[:2]
-            logits_sequence_flattened = self._compute_logits_from_hidden_state(
+
+            logits_sequence = self._compute_logits_from_hidden_state(
                 hidden_state=hidden_states_for_object_prediction.flatten(0, 1),
                 candidates=None
                 if candidates is None
@@ -196,10 +197,19 @@ class RnnReceiverBase(ReceiverBase):
                 .expand(batch_size, seq_len, *candidates.shape[2:])
                 .reshape(batch_size * seq_len, *candidates.shape[2:]),
             )
-            logits_sequence = logits_sequence_flattened.reshape(
-                batch_size, seq_len, *logits_sequence_flattened.shape[1:]
+
+            logits_feature_dims = logits_sequence.shape[1:]
+
+            logits_sequence = logits_sequence.reshape(batch_size, seq_len, -1)
+
+            last_logits = (
+                logits_sequence.exp()
+                .mul(message_mask)
+                .sum(dim=1)
+                .div(message_length)
+                .log()
+                .reshape(batch_size, seq_len, *logits_feature_dims)
             )
-            last_logits = logits_sequence.exp().mul(message_mask).sum(dim=1).div(message_length).log()
         else:
             last_logits = self._compute_logits_from_hidden_state(
                 hidden_state=hidden_states_for_object_prediction[
