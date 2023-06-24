@@ -81,6 +81,7 @@ class EnsembleBetaVAEGame(GameBase):
         output_r = receiver.forward(
             message=output_s.message,
             message_length=output_s.message_length,
+            message_mask=output_s.message_mask,
             candidates=batch.candidates,
         )
 

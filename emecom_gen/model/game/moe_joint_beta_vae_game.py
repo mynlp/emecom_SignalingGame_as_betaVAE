@@ -83,6 +83,7 @@ class MOEJointBetaVAEGame(GameBase):
             r.forward(
                 message=sender_output.message,
                 message_length=sender_output.message_length,
+                message_mask=sender_output.message_mask,
                 candidates=batch.candidates,
             )
             for r in self.receivers

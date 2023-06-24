@@ -18,6 +18,7 @@ class ReceiverBase(Module):
         self,
         message: Tensor,
         message_length: Tensor,
+        message_mask: Tensor,
         candidates: Optional[Tensor],
     ) -> ReceiverOutput:
         raise NotImplementedError()
