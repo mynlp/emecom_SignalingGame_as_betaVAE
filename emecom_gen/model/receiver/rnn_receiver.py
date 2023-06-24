@@ -204,7 +204,7 @@ class RnnReceiverBase(ReceiverBase):
 
             last_logits = (
                 logits_sequence.exp()
-                .mul(message_mask)
+                .mul(message_mask.unsqueeze(2))
                 .sum(dim=1)
                 .div(message_length)
                 .log()
