@@ -32,9 +32,11 @@ class RnnReceiverBase(ReceiverBase):
         self.vocab_size = vocab_size
 
         if enable_layer_norm:
-            self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+            self.h_layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+            self.e_layer_norm = LayerNorm(embedding_dim, elementwise_affine=False)
         else:
-            self.layer_norm = Identity()
+            self.h_layer_norm = Identity()
+            self.e_layer_norm = Identity()
 
         self.enable_residual_connection = enable_residual_connection
         self.enable_impatience = enable_impatience
@@ -134,7 +136,7 @@ class RnnReceiverBase(ReceiverBase):
         next_h = h_dropout(next_h)
         if self.enable_residual_connection:
             next_h = next_h + h
-        next_h = self.layer_norm.forward(next_h)
+        next_h = self.h_layer_norm.forward(next_h)
 
         return next_h, next_c
 
@@ -142,7 +144,7 @@ class RnnReceiverBase(ReceiverBase):
         self,
         message: Tensor,
     ):
-        embedded_message = self._embed_message(message)
+        embedded_message = self.e_layer_norm.forward(self._embed_message(message))
 
         h = torch.zeros(size=(message.shape[0], self.hidden_size), device=message.device)
         c = torch.zeros_like(h)
@@ -296,7 +298,7 @@ class RnnReceiverBase(ReceiverBase):
         batch_size = message.shape[0]
         device = message.device
 
-        embedded_message = torch.matmul(message, self.symbol_embedding.weight)
+        embedded_message = self.e_layer_norm.forward(torch.matmul(message, self.symbol_embedding.weight))
 
         if self.bos_embedding is not None:
             embedded_message = torch.cat(
@@ -318,7 +320,7 @@ class RnnReceiverBase(ReceiverBase):
                 h, c = self.cell.forward(embedded_message[:, step], (h, c))
             else:
                 h = self.cell.forward(embedded_message[:, step], h)
-            h = self.layer_norm.forward(h)
+            h = self.h_layer_norm.forward(h)
             step_logits = self._compute_logits_from_hidden_state(h, candidates)
             logits_list.append(step_logits)
             if self.symbol_predictor is not None:

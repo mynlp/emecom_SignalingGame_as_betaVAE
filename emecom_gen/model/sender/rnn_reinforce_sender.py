@@ -63,9 +63,11 @@ class RnnReinforceSender(SenderBase):
         self.value_estimator = ValueEstimator(hidden_size)
 
         if enable_layer_norm:
-            self.layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+            self.h_layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
+            self.e_layer_norm = LayerNorm(embedding_dim, elementwise_affine=False)
         else:
-            self.layer_norm = Identity()
+            self.h_layer_norm = Identity()
+            self.e_layer_norm = Identity()
 
         self.enable_residual_connection = enable_residual_connection
         self.dropout_p = dropout_p
@@ -134,7 +136,7 @@ class RnnReinforceSender(SenderBase):
         next_h = h_dropout(next_h)
         if self.enable_residual_connection:
             next_h = next_h + h
-        next_h = self.layer_norm.forward(next_h)
+        next_h = self.h_layer_norm.forward(next_h)
 
         return next_h, next_c
 
@@ -151,11 +153,11 @@ class RnnReinforceSender(SenderBase):
         input = batch.input
         batch_size = input.shape[0]
 
-        encoder_hidden_state = self.layer_norm.forward(self.object_encoder(input))
+        encoder_hidden_state = self.h_layer_norm.forward(self.object_encoder(input))
 
         h = encoder_hidden_state
         c = torch.zeros_like(h)
-        e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
+        e = self.e_layer_norm.forward(self.bos_embedding).unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
         h_dropout = self._make_dropout_function(h)
         e_dropout = self._make_dropout_function(e)
@@ -188,7 +190,7 @@ class RnnReinforceSender(SenderBase):
             else:
                 symbol = step_logits.argmax(dim=-1)
 
-            e = e_dropout(self.embedding.forward(symbol))
+            e = self.e_layer_norm.forward(e_dropout(self.embedding.forward(symbol)))
 
             symbol_list.append(symbol)
             logits_list.append(step_logits)
@@ -220,12 +222,11 @@ class RnnReinforceSender(SenderBase):
 
         batch_size = input.shape[0]
 
-        encoder_hidden_state = self.object_encoder(input)
-        encoder_hidden_state = self.layer_norm.forward(encoder_hidden_state)
+        encoder_hidden_state = self.h_layer_norm.forward(self.object_encoder(input))
 
         h = encoder_hidden_state
         c = torch.zeros_like(h)
-        e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
+        e = self.e_layer_norm.forward(self.bos_embedding).unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
         symbol_list: list[Tensor] = []
         logits_list: list[Tensor] = []
@@ -243,7 +244,7 @@ class RnnReinforceSender(SenderBase):
             else:
                 h = self.cell.forward(e, h)
 
-            h = self.layer_norm.forward(h)
+            h = self.h_layer_norm.forward(h)
 
             step_logits = self.hidden_to_output.forward(h)
 
@@ -255,6 +256,8 @@ class RnnReinforceSender(SenderBase):
                     symbol = symbol + (shape_keeping_argmax(symbol) - symbol).detach()
             else:
                 symbol = shape_keeping_argmax(step_logits)
+
+            e = self.e_layer_norm.forward(torch.mm(symbol, self.embedding.weight))
 
             symbol_list.append(symbol)
             logits_list.append(step_logits)
@@ -282,9 +285,9 @@ class RnnReinforceSender(SenderBase):
         beam_size: int,
         temperature: float = 1,
     ):
-        e = self.bos_embedding.reshape(1, 1, -1).expand(batch.batch_size, beam_size, -1)
+        e = self.e_layer_norm.forward(self.bos_embedding).reshape(1, 1, -1).expand(batch.batch_size, beam_size, -1)
         h = (
-            self.layer_norm.forward(self.object_encoder(batch.input))
+            self.h_layer_norm.forward(self.object_encoder(batch.input))
             .reshape(batch.batch_size, 1, -1)
             .expand(batch.batch_size, beam_size, -1)
         )
@@ -364,7 +367,7 @@ class RnnReinforceSender(SenderBase):
             )
             topk_histories[:, :, step] = topk_outputs
 
-            e = self.embedding.forward(topk_outputs)
+            e = self.e_layer_norm.forward(self.embedding.forward(topk_outputs))
             h = torch.gather(
                 h, dim=1, index=topk_history_indices.reshape(batch.batch_size, beam_size, 1).expand(*h.shape)
             )
