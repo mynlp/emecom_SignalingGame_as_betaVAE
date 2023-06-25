@@ -153,7 +153,7 @@ class EnsembleBetaVAEGame(GameBase):
         surrogate_loss = (
             loss_r
             + loss_p
-            + ((loss_s - baseline.detach() - beta) * mask * output_s.message_log_probs / denominator).sum(dim=-1)
+            + ((loss_s - baseline.detach() + beta) * mask * output_s.message_log_probs / denominator).sum(dim=-1)
             + baseline_loss
         )
 
