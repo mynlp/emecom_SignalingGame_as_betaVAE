@@ -100,7 +100,7 @@ class EnsembleBetaVAEGame(GameBase):
         acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
 
         mask = output_s.message_mask
-        beta = self.beta_scheduler.forward(self.batch_step, acc=acc)
+        beta = self.beta_scheduler.forward(self.batch_step, acc=acc) / self.n_agent_pairs
 
         communication_loss = F.cross_entropy(
             input=output_r.last_logits.permute(0, -1, *tuple(range(1, output_r.last_logits.dim() - 1))),
@@ -112,9 +112,8 @@ class EnsembleBetaVAEGame(GameBase):
 
         loss_s = (
             communication_loss.detach().unsqueeze(1)
-            + inversed_cumsum((output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask, dim=1)
-            * beta
-            / self.n_agent_pairs
+            + beta
+            * inversed_cumsum((output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask, dim=1)
         ) * mask
 
         match self.baseline:
@@ -147,13 +146,15 @@ class EnsembleBetaVAEGame(GameBase):
                 )
 
         loss_r = communication_loss
-        loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta / self.n_agent_pairs
+        loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta
+
+        baseline_loss = ((loss_s - baseline).square() * mask).sum(dim=-1)
 
         surrogate_loss = (
             loss_r
             + loss_p
-            + ((loss_s - baseline.detach()) * mask * output_s.message_log_probs / denominator).sum(dim=-1)
-            + ((loss_s - baseline).square() * mask).sum(dim=-1)
+            + ((loss_s - baseline.detach() - beta) * mask * output_s.message_log_probs / denominator).sum(dim=-1)
+            + baseline_loss
         )
 
         if self.receiver_incrementality:
