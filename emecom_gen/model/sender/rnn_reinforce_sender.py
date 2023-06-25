@@ -59,7 +59,7 @@ class RnnReinforceSender(SenderBase):
         )
         self.embedding = Embedding(vocab_size, embedding_dim)
         self.bos_embedding = Parameter(torch.zeros(embedding_dim))
-        self.hidden_to_output = Linear(hidden_size, vocab_size)
+        self.hidden_to_output = Linear(hidden_size, vocab_size, bias=False)
         self.value_estimator = ValueEstimator(hidden_size)
 
         if enable_layer_norm:

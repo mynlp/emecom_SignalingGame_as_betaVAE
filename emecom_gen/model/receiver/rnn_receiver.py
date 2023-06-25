@@ -46,7 +46,7 @@ class RnnReceiverBase(ReceiverBase):
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
         if enable_symbol_prediction:
-            self.symbol_predictor = Linear(hidden_size, vocab_size)
+            self.symbol_predictor = Linear(hidden_size, vocab_size, bias=False)
             self.bos_embedding = Parameter(torch.zeros(embedding_dim))
         else:
             self.symbol_predictor = None
