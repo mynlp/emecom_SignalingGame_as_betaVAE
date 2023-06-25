@@ -174,6 +174,7 @@ class EnsembleBetaVAEGame(GameBase):
             sender_output=output_s,
             receiver_output=output_r,
             message_prior_output=output_p,
+            baseline_loss=baseline_loss,
         )
 
     def forward_gumbel_softmax(
