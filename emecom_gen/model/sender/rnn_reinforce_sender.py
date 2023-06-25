@@ -181,7 +181,7 @@ class RnnReinforceSender(SenderBase):
             h, c = self._step_hidden_state(e, h, c, h_dropout)
 
             step_logits = self.hidden_to_output.forward(h)
-            step_estimated_value = self.value_estimator.forward(h)
+            step_estimated_value = self.value_estimator.forward(h.detach())
 
             if forced_message is not None:
                 symbol = forced_message[:, step]
