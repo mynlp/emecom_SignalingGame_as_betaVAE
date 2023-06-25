@@ -15,6 +15,7 @@ class GameOutput:
     sender_output: Optional[SenderOutput] = None
     receiver_output: Optional[ReceiverOutput] = None
     message_prior_output: Optional[MessagePriorOutput] = None
+    baseline_loss: Optional[Tensor] = None
 
     def __post_init__(self):
         nans: list[str] = []
@@ -59,6 +60,8 @@ class GameOutput:
                         .neg(),
                     }
                 )
+        if self.baseline_loss is not None:
+            log_dict.update({"baseline_loss": self.baseline_loss})
 
         return {prefix + k + suffix: v.detach().float().mean() for k, v in log_dict.items()}
 
