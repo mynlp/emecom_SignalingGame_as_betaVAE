@@ -64,6 +64,8 @@ class ArgumentParser(CommonArgumentParser):
                 f"LN{self.sender_layer_norm}"
                 f"RC{self.sender_residual_connection}"
                 f"WD{self.sender_weight_decay}"
+                f"DO{self.sender_dropout_type}"
+                f"P{self.sender_dropout_p}"
             )
 
             receiver_architecture_info = (
@@ -73,6 +75,8 @@ class ArgumentParser(CommonArgumentParser):
                 f"LN{self.receiver_layer_norm}"
                 f"RC{self.receiver_residual_connection}"
                 f"WD{self.receiver_weight_decay}"
+                f"DO{self.receiver_dropout_type}"
+                f"P{self.receiver_dropout_p}"
                 f"IP{self.receiver_impatience}"
             )
 
