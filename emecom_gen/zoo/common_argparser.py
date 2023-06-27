@@ -57,7 +57,7 @@ class CommonArgumentParser(Tap):
     beta_constant_value: float = 1
     beta_sigmoid_gain: float = 0.01
     beta_sigmoid_offset: float = 1000
-    beta_accbased_exponent: float = 10
+    beta_accbased_exponent: float = 1
     beta_accbased_smoothing_factor: float = 0.1
 
     optimizer_class: Literal["adam", "sgd"] = "adam"
