@@ -146,6 +146,8 @@ def main():
             enable_residual_connection=args.sender_residual_connection,
             dropout_p=args.sender_dropout_p,
             dropout_type=args.sender_dropout_type,
+            symbol_prediction_layer_bias=args.receiver_symbol_prediction_layer_bias,
+            symbol_prediction_layer_descending=args.receiver_symbol_prediction_layer_descending,
         )
         for _ in range(args.n_agent_pairs)
     ]

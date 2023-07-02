@@ -1,4 +1,4 @@
-from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Linear, Identity
+from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Identity
 from torch import Tensor
 from typing import Callable, Literal, Optional
 import torch
@@ -6,6 +6,7 @@ from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 from torch.distributions.categorical import Categorical
 
+from ..symbol_prediction_layer import SymbolPredictionLayer
 from ..message_prior import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 from .receiver_base import ReceiverBase
 from .receiver_output import ReceiverOutput, ReceiverOutputGumbelSoftmax
@@ -24,6 +25,8 @@ class RnnReceiverBase(ReceiverBase):
         enable_impatience: bool = False,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
+        symbol_prediction_layer_bias: bool = True,
+        symbol_prediction_layer_descending: bool = False,
     ) -> None:
         super().__init__()
 
@@ -46,7 +49,12 @@ class RnnReceiverBase(ReceiverBase):
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
         if enable_symbol_prediction:
-            self.symbol_predictor = Linear(hidden_size, vocab_size, bias=False)
+            self.symbol_predictor = SymbolPredictionLayer(
+                hidden_size,
+                vocab_size,
+                bias=symbol_prediction_layer_bias,
+                descending=symbol_prediction_layer_descending,
+            )
             self.bos_embedding = Parameter(torch.zeros(embedding_dim))
         else:
             self.symbol_predictor = None
@@ -370,6 +378,8 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         enable_impatience: bool = False,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
+        symbol_prediction_layer_bias: bool = True,
+        symbol_prediction_layer_descending: bool = False,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -382,6 +392,8 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             enable_impatience=enable_impatience,
             dropout_p=dropout_p,
             dropout_type=dropout_type,
+            symbol_prediction_layer_bias=symbol_prediction_layer_bias,
+            symbol_prediction_layer_descending=symbol_prediction_layer_descending,
         )
 
         self.object_decoder = object_decoder
@@ -408,6 +420,8 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         enable_impatience: bool = False,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
+        symbol_prediction_layer_bias: bool = True,
+        symbol_prediction_layer_descending: bool = False,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -420,6 +434,8 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             enable_impatience=enable_impatience,
             dropout_p=dropout_p,
             dropout_type=dropout_type,
+            symbol_prediction_layer_bias=symbol_prediction_layer_bias,
+            symbol_prediction_layer_descending=symbol_prediction_layer_descending,
         )
 
         self.object_encoder = object_encoder

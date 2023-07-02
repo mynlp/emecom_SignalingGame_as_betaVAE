@@ -37,6 +37,8 @@ class CommonArgumentParser(Tap):
     receiver_weight_decay: float = 0  # Receiver's weight decay.
     receiver_dropout_p: float = 0  # Receiver's dropout rate.
     receiver_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Receiver's dropout type.
+    receiver_symbol_prediction_layer_bias: bool = True
+    receiver_symbol_prediction_layer_descending: bool = False
 
     sender_update_prob: float = 1
     receiver_update_prob: float = 1

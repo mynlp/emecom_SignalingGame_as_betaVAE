@@ -165,6 +165,8 @@ def main():
             enable_impatience=args.receiver_impatience,
             dropout_p=args.receiver_dropout_p,
             dropout_type=args.receiver_dropout_type,
+            symbol_prediction_layer_bias=args.receiver_symbol_prediction_layer_bias,
+            symbol_prediction_layer_descending=args.receiver_symbol_prediction_layer_descending,
         )
         for _ in range(args.n_agent_pairs)
     ]

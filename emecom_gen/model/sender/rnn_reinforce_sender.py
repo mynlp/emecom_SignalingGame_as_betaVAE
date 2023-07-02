@@ -1,5 +1,5 @@
 from torch import Tensor
-from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, Linear, LayerNorm, Identity, Parameter
+from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, LayerNorm, Identity, Parameter
 from torch.nn import functional as F
 from torch.distributions import RelaxedOneHotCategorical
 from torch.distributions import Categorical
@@ -7,23 +7,14 @@ from typing import Callable, Literal, Optional
 import torch
 
 from ...data import Batch
+from ..symbol_prediction_layer import SymbolPredictionLayer
+from ..value_estimation_layer import ValueEstimationLayer
 from .sender_output import SenderOutput, SenderOutputGumbelSoftmax
 from .sender_base import SenderBase
 
 
 def shape_keeping_argmax(x: Tensor) -> Tensor:
     return torch.zeros_like(x).scatter_(-1, x.argmax(dim=-1, keepdim=True), 1)
-
-
-class ValueEstimator(Linear):
-    def __init__(
-        self,
-        hidden_size: int,
-    ) -> None:
-        super().__init__(hidden_size, 1, bias=True)
-
-    def forward(self, input: Tensor) -> Tensor:
-        return super().forward(input).squeeze(-1)
 
 
 class RnnReinforceSender(SenderBase):
@@ -42,6 +33,8 @@ class RnnReinforceSender(SenderBase):
         enable_residual_connection: bool = True,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
+        symbol_prediction_layer_bias: bool = True,
+        symbol_prediction_layer_descending: bool = False,
     ) -> None:
         super().__init__()
 
@@ -59,8 +52,13 @@ class RnnReinforceSender(SenderBase):
         )
         self.embedding = Embedding(vocab_size, embedding_dim)
         self.bos_embedding = Parameter(torch.zeros(embedding_dim))
-        self.hidden_to_output = Linear(hidden_size, vocab_size, bias=False)
-        self.value_estimator = ValueEstimator(hidden_size)
+        self.symbol_predictor = SymbolPredictionLayer(
+            hidden_size,
+            vocab_size,
+            bias=symbol_prediction_layer_bias,
+            descending=symbol_prediction_layer_descending,
+        )
+        self.value_estimator = ValueEstimationLayer(hidden_size)
 
         if enable_layer_norm:
             self.h_layer_norm = LayerNorm(hidden_size, elementwise_affine=False)
@@ -180,7 +178,7 @@ class RnnReinforceSender(SenderBase):
         for step in range(num_steps):
             h, c = self._step_hidden_state(e, h, c, h_dropout)
 
-            step_logits = self.hidden_to_output.forward(h)
+            step_logits = self.symbol_predictor.forward(h)
             step_estimated_value = self.value_estimator.forward(h.detach())
 
             if forced_message is not None:
@@ -246,7 +244,7 @@ class RnnReinforceSender(SenderBase):
 
             h = self.h_layer_norm.forward(h)
 
-            step_logits = self.hidden_to_output.forward(h)
+            step_logits = self.symbol_predictor.forward(h)
 
             if forced_message is not None:
                 symbol = forced_message[:, step]
@@ -340,7 +338,7 @@ class RnnReinforceSender(SenderBase):
 
             # output_log_prob_score: size (batch_size, beam_size, vocab_size)
             output_log_prob_score = (
-                (self.hidden_to_output.forward(h) + logits_mask_for_finished_decoding) / temperature
+                (self.symbol_predictor.forward(h) + logits_mask_for_finished_decoding) / temperature
             ).log_softmax(dim=2)
 
             indices: Tensor  # type hinting
