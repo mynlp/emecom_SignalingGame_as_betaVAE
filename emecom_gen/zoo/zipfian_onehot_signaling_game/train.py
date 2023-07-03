@@ -167,6 +167,7 @@ def main():
             dropout_type=args.receiver_dropout_type,
             symbol_prediction_layer_bias=args.receiver_symbol_prediction_layer_bias,
             symbol_prediction_layer_descending=args.receiver_symbol_prediction_layer_descending,
+            symbol_prediction_layer_fixed_prob_eos=args.receiver_symbol_prediction_layer_fixed_prob_eos,
         )
         for _ in range(args.n_agent_pairs)
     ]

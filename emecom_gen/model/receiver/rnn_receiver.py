@@ -27,6 +27,7 @@ class RnnReceiverBase(ReceiverBase):
         dropout_p: float = 0,
         symbol_prediction_layer_bias: bool = True,
         symbol_prediction_layer_descending: bool = False,
+        symbol_prediction_layer_fixed_prob_eos: Optional[float] = None,
     ) -> None:
         super().__init__()
 
@@ -54,6 +55,7 @@ class RnnReceiverBase(ReceiverBase):
                 vocab_size,
                 bias=symbol_prediction_layer_bias,
                 descending=symbol_prediction_layer_descending,
+                fixed_prob_eos=symbol_prediction_layer_fixed_prob_eos,
             )
             self.bos_embedding = Parameter(torch.zeros(embedding_dim))
         else:
@@ -380,6 +382,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         dropout_p: float = 0,
         symbol_prediction_layer_bias: bool = True,
         symbol_prediction_layer_descending: bool = False,
+        symbol_prediction_layer_fixed_prob_eos: Optional[float] = None,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -394,6 +397,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             dropout_type=dropout_type,
             symbol_prediction_layer_bias=symbol_prediction_layer_bias,
             symbol_prediction_layer_descending=symbol_prediction_layer_descending,
+            symbol_prediction_layer_fixed_prob_eos=symbol_prediction_layer_fixed_prob_eos,
         )
 
         self.object_decoder = object_decoder
@@ -422,6 +426,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         dropout_p: float = 0,
         symbol_prediction_layer_bias: bool = True,
         symbol_prediction_layer_descending: bool = False,
+        symbol_prediction_layer_fixed_prob_eos: Optional[float] = None,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -436,6 +441,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             dropout_type=dropout_type,
             symbol_prediction_layer_bias=symbol_prediction_layer_bias,
             symbol_prediction_layer_descending=symbol_prediction_layer_descending,
+            symbol_prediction_layer_fixed_prob_eos=symbol_prediction_layer_fixed_prob_eos,
         )
 
         self.object_encoder = object_encoder

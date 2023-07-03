@@ -169,6 +169,7 @@ def main():
             enable_impatience=args.receiver_impatience,
             dropout_p=args.receiver_dropout_p,
             dropout_type=args.receiver_dropout_type,
+            symbol_prediction_layer_fixed_prob_eos=args.receiver_symbol_prediction_layer_fixed_prob_eos,
         )
         for _ in range(args.n_agent_pairs)
     ]
