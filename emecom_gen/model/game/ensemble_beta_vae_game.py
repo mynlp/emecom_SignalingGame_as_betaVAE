@@ -142,7 +142,7 @@ class EnsembleBetaVAEGame(GameBase):
                         - (loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)).pow(2)
                     )
                     .sqrt()
-                    .clamp(min=1e-8)
+                    .clamp(min=1e-3)
                 )
 
         loss_r = communication_loss
