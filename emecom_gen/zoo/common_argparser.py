@@ -39,6 +39,7 @@ class CommonArgumentParser(Tap):
     receiver_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Receiver's dropout type.
     receiver_symbol_prediction_layer_bias: bool = True
     receiver_symbol_prediction_layer_descending: bool = False
+    receiver_symbol_prediction_layer_fixed_prob_eos: Optional[float] = None
 
     sender_update_prob: float = 1
     receiver_update_prob: float = 1
