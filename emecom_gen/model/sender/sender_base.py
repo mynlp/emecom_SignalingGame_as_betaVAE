@@ -17,16 +17,19 @@ class SenderBase(Module):
         self,
         batch: Batch,
         forced_message: Optional[Tensor] = None,
+        beam_size: int = 1,
     ) -> SenderOutput:
         return self.forward(
             batch,
             forced_message=forced_message,
+            beam_size=beam_size,
         )
 
     def forward(
         self,
         batch: Batch,
         forced_message: Optional[Tensor] = None,
+        beam_size: int = 1,
     ) -> SenderOutput:
         raise NotImplementedError()
 
