@@ -15,10 +15,12 @@ class DumpLanguage(Callback):
         self,
         save_dir: Path,
         meaning_type: Literal["input", "target_label", "path"],
+        beam_sizes: tuple[int, ...] = (1, 2, 4, 8),
     ):
         super().__init__()
         self.save_dir = save_dir
         self.meaning_type: Literal["input", "target_label", "path"] = meaning_type
+        self.beam_sizes = beam_sizes
 
         self.meaning_saved_flag = False
 
@@ -36,12 +38,13 @@ class DumpLanguage(Callback):
         key_type: Literal["meaning", "message", "message_length"],
         step: int | Literal["last"] = "last",
         sender_idx: int = 0,
+        beam_size: int = 1,
     ):
         match key_type:
             case "meaning":
                 return "meaning"
             case other if other in ("message", "message_length"):
-                return f"{other}_step_{step}_sender_idx_{sender_idx}"
+                return f"{other}_step_{step}_sender_idx_{sender_idx}_beam_size_{beam_size}"
             case _:
                 raise ValueError(f"Unknown key_type {key_type}.")
 
@@ -80,28 +83,36 @@ class DumpLanguage(Callback):
                             file=f,
                         )
 
-            messages: defaultdict[int, list[list[int]]] = defaultdict(list)
-            message_lengths: defaultdict[int, list[int]] = defaultdict(list)
+            messages: defaultdict[tuple[int, int], list[list[int]]] = defaultdict(list)
+            message_lengths: defaultdict[tuple[int, int], list[int]] = defaultdict(list)
 
             for batch in dataloader:
                 batch: Batch = batch.to(game.device)
-
                 for sender_idx, sender in list(enumerate(game.senders)):
-                    sender_output = sender.forward(batch)
-                    messages[sender_idx].extend((sender_output.message * sender_output.message_mask.long()).tolist())
-                    message_lengths[sender_idx].extend(sender_output.message_length.tolist())
+                    for beam_size in self.beam_sizes:
+                        sender_output = sender.forward(batch, beam_size=beam_size)
+                        messages[sender_idx, beam_size].extend(
+                            (sender_output.message * sender_output.message_mask.long()).tolist()
+                        )
+                        message_lengths[sender_idx, beam_size].extend(sender_output.message_length.tolist())
 
-            for sender_idx in messages.keys():
+            for sender_idx, beam_size in messages.keys():
                 with self.make_common_save_file_path(self.save_dir, dataloader_idx).open("a") as f:
                     print(
                         json.dumps(
                             {
-                                self.make_common_json_key_name("message", step=step, sender_idx=sender_idx): messages[
-                                    sender_idx
-                                ],
                                 self.make_common_json_key_name(
-                                    "message_length", step=step, sender_idx=sender_idx
-                                ): message_lengths[sender_idx],
+                                    "message",
+                                    step=step,
+                                    sender_idx=sender_idx,
+                                    beam_size=beam_size,
+                                ): messages[sender_idx, beam_size],
+                                self.make_common_json_key_name(
+                                    "message_length",
+                                    step=step,
+                                    sender_idx=sender_idx,
+                                    beam_size=beam_size,
+                                ): message_lengths[sender_idx, beam_size],
                             }
                         ),
                         file=f,
