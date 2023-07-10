@@ -94,10 +94,7 @@ class EnsembleBetaVAEGame(GameBase):
             case p:
                 output_p = p.forward(message=output_s.message, message_length=output_s.message_length)
 
-        matching_count = (output_r.last_logits.argmax(dim=-1) == batch.target_label).long()
-        while matching_count.dim() > 1:
-            matching_count = matching_count.sum(dim=-1)
-        acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
+        acc = self.compute_accuracy_tensor(batch, output_r)
 
         mask = output_s.message_mask
         beta = self.beta_scheduler.forward(self.batch_step, acc=acc) / self.n_agent_pairs

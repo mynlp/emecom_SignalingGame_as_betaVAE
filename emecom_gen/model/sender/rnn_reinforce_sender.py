@@ -36,15 +36,15 @@ class RnnReinforceSender(SenderBase):
         symbol_prediction_layer_bias: bool = True,
         symbol_prediction_layer_descending: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            vocab_size=vocab_size,
+            max_len=max_len,
+            fix_message_length=fix_message_length,
+            gs_temperature=gs_temperature,
+            gs_straight_through=gs_straight_through,
+        )
 
         self.object_encoder = object_encoder
-        self.vocab_size = vocab_size
-        self.max_len = max_len
-        self.fix_message_length = fix_message_length
-
-        self.gs_temperature = gs_temperature
-        self.gs_straight_through = gs_straight_through
 
         self.cell = {"rnn": RNNCell, "gru": GRUCell, "lstm": LSTMCell}[cell_type](
             embedding_dim,

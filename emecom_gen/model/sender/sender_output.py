@@ -38,23 +38,43 @@ class SenderOutput:
 
     @property
     def message_length(self) -> Tensor:
-        if self.fix_message_length:
-            return torch.full(
-                size=self.message.shape[:-1],
-                fill_value=self.message.shape[-1],
-                dtype=torch.long,
-                device=self.device,
-            )
-        else:
-            is_eos = (self.message == 0).long()
-            return ((is_eos.cumsum(dim=-1) - is_eos) == 0).long().sum(dim=-1)
+        return self.compute_message_length(
+            message=self.message,
+            fix_message_length=self.fix_message_length,
+        )
 
     @property
     def message_mask(self) -> Tensor:
-        if self.fix_message_length:
-            return torch.ones_like(self.message, dtype=torch.float)
+        return self.compute_message_mask(
+            message=self.message,
+            fix_message_length=self.fix_message_length,
+        )
+
+    @staticmethod
+    def compute_message_length(
+        message: Tensor,
+        fix_message_length: bool,
+    ):
+        if fix_message_length:
+            return torch.full(
+                size=message.shape[:-1],
+                fill_value=message.shape[-1],
+                dtype=torch.long,
+                device=message.device,
+            )
         else:
-            is_eos = (self.message == 0).long()
+            is_eos = (message == 0).long()
+            return ((is_eos.cumsum(dim=-1) - is_eos) == 0).long().sum(dim=-1)
+
+    @staticmethod
+    def compute_message_mask(
+        message: Tensor,
+        fix_message_length: bool,
+    ):
+        if fix_message_length:
+            return torch.ones_like(message, dtype=torch.float)
+        else:
+            is_eos = (message == 0).long()
             return ((is_eos.cumsum(dim=-1) - is_eos) == 0).float()
 
 

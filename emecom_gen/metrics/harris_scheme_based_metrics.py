@@ -5,9 +5,11 @@ from typing import Optional, Hashable, TypeVar, Generic, Sequence
 from collections import defaultdict, Counter
 import itertools
 import numpy as np
+import torch
 
 from ..data import Batch
 from ..model.game import GameBase
+from ..model.sender import SenderOutput
 
 T = TypeVar("T", bound=Hashable)
 
@@ -18,6 +20,7 @@ class HarrisScheme(Generic[T]):
     __freq: Optional[Counter[tuple[T, ...]]]
     __branching_entropy: Optional[dict[tuple[T, ...], float]]
     __conditional_entropy: Optional[dict[int, float]]
+    __max_branching_entropy_increase: Optional[list[dict[int, float]]]
     __boundaries: Optional[list[set[int]]]
     __segments: Optional[list[tuple[tuple[T, ...], ...]]]
     __segment_ids: Optional[dict[tuple[T, ...], int]]
@@ -26,6 +29,8 @@ class HarrisScheme(Generic[T]):
     __random_segments: Optional[list[tuple[tuple[T, ...], ...]]]
     __random_segment_ids: Optional[dict[tuple[T, ...], int]]
     __hashed_random_segments: Optional[list[tuple[int, ...]]]
+    __language_randomly_permuted_among_segments: Optional[list[tuple[T, ...]]]
+    __language_randomly_permuted_within_segments: Optional[list[tuple[T, ...]]]
 
     def __init__(
         self,
@@ -45,6 +50,7 @@ class HarrisScheme(Generic[T]):
         self.__freq = None
         self.__branching_entropy = None
         self.__conditional_entropy = None
+        self.__max_branching_entropy_increase = None
         self.__reset_on_setting_threshold()
         self.__reset_on_setting_random_seed()
 
@@ -60,6 +66,8 @@ class HarrisScheme(Generic[T]):
         self.__random_segments = None
         self.__random_segment_ids = None
         self.__hashed_random_segments = None
+        self.__language_randomly_permuted_among_segments = None
+        self.__language_randomly_permuted_within_segments = None
 
     @property
     def threshold(self) -> float:
@@ -130,11 +138,11 @@ class HarrisScheme(Generic[T]):
         return self.__conditional_entropy
 
     @property
-    def boundaries(self) -> list[set[int]]:
-        if self.__boundaries is None:
-            self.__boundaries = []
+    def max_branching_entropy_increase(self) -> list[dict[int, float]]:
+        if self.__max_branching_entropy_increase is None:
+            self.__max_branching_entropy_increase = []
             for d in self.data:
-                self.__boundaries.append(set())
+                max_increase: defaultdict[int, float] = defaultdict(float)
                 start: int = 0
                 width: int = 2
                 """
@@ -145,13 +153,23 @@ class HarrisScheme(Generic[T]):
                     context = d[start : start + width]
                     prev_branching_entropy = self.branching_entropy[context[:-1]]
                     pres_branching_entropy = self.branching_entropy[context]
-                    if pres_branching_entropy - prev_branching_entropy > self.threshold:
-                        self.__boundaries[-1].add(start + width)
+                    max_increase[start + width] = max(
+                        max_increase[start + width], pres_branching_entropy - prev_branching_entropy
+                    )
                     if start + width + 1 < len(d):
                         width = 1 + width
                     else:
                         start = 1 + start
                         width = 2
+                self.__max_branching_entropy_increase.append(dict(max_increase))
+        return self.__max_branching_entropy_increase
+
+    @property
+    def boundaries(self) -> list[set[int]]:
+        if self.__boundaries is None:
+            self.__boundaries = []
+            for max_inc in self.max_branching_entropy_increase:
+                self.__boundaries.append({k for k, v in max_inc.items() if v > self.threshold})
         return self.__boundaries
 
     @property
@@ -230,10 +248,40 @@ class HarrisScheme(Generic[T]):
     def vocab_size(self) -> int:
         return len(self.segment_ids)
 
+    @property
+    def language_randomly_permuted_among_segments(self) -> list[tuple[T, ...]]:
+        if self.__language_randomly_permuted_among_segments is None:
+            random_state = np.random.RandomState(seed=self.random_seed)
+            self.__language_randomly_permuted_among_segments = [
+                tuple(itertools.chain.from_iterable(segs[int(i)] for i in random_state.permutation(len(segs))))
+                for segs in self.segments
+            ]
+        return self.__language_randomly_permuted_among_segments
+
+    @property
+    def language_randomly_permuted_within_segments(self) -> list[tuple[T, ...]]:
+        if self.__language_randomly_permuted_within_segments is None:
+            random_state = np.random.RandomState(seed=self.random_seed)
+            self.__language_randomly_permuted_within_segments = [
+                tuple(
+                    itertools.chain.from_iterable(
+                        (seg[int(i)] for i in random_state.permutation(len(seg))) for seg in segs
+                    )
+                )
+                for segs in self.segments
+            ]
+        return self.__language_randomly_permuted_within_segments
+
 
 class HarrisSchemeBasedMetrics(Callback):
-    def __init__(self):
+    def __init__(
+        self,
+        thresholds: Sequence[float] = (0,),
+        beam_size: int = 1,
+    ):
         super().__init__()
+        self.thresholds = tuple(thresholds)
+        self.beam_size = beam_size
 
     def on_validation_epoch_end(
         self,
@@ -253,15 +301,99 @@ class HarrisSchemeBasedMetrics(Callback):
                 messages: list[list[int]] = []
                 for batch in dataloader:
                     batch: Batch = batch.to(pl_module.device)
-                    output = sender.forward(batch)
+                    output = sender.forward(batch, beam_size=self.beam_size)
                     messages.extend(
                         m[:length] for m, length in zip(output.message.tolist(), output.message_length.tolist())
                     )
+
                 harris_scheme = HarrisScheme(language_data=messages)
-                pl_module.log_dict(
-                    {
-                        f"val_mean_n_boundaries/dataloader_{dataloader_idx}/sender_idx_{sender_idx}": harris_scheme.mean_n_boundaries,
-                        f"val_vocab_size/dataloader_{dataloader_idx}/sender_idx_{sender_idx}": harris_scheme.vocab_size,
-                    },
-                    add_dataloader_idx=False,
-                )
+
+                for thr in self.thresholds:
+                    harris_scheme.threshold = thr
+
+                    pl_module.log_dict(
+                        {
+                            f"val_mean_n_boundaries/dataloader_{dataloader_idx}/sender_idx_{sender_idx}/beam_size_{self.beam_size}/threshold_{thr}": harris_scheme.mean_n_boundaries,
+                            f"val_vocab_size/dataloader_{dataloader_idx}/sender_idx_{sender_idx}/beam_size_{self.beam_size}/threshold_{thr}": harris_scheme.vocab_size,
+                        },
+                        add_dataloader_idx=False,
+                    )
+
+                    messages_permuted_among_segments = torch.nn.utils.rnn.pad_sequence(
+                        [torch.as_tensor(x) for x in harris_scheme.language_randomly_permuted_among_segments],
+                        batch_first=True,
+                        padding_value=0,
+                    )
+                    messages_permuted_within_segments = torch.nn.utils.rnn.pad_sequence(
+                        [torch.as_tensor(x) for x in harris_scheme.language_randomly_permuted_within_segments],
+                        batch_first=True,
+                        padding_value=0,
+                    )
+
+                    for receiver_idx, receiver in list(enumerate(pl_module.receivers)):
+                        datapoint_idx = 0
+
+                        acc_permuted_among_segments = 0
+                        acc_permuted_within_segments = 0
+
+                        for batch in dataloader:
+                            batch: Batch = batch.to(pl_module.device)
+
+                            msg_permuted_among_segments = messages_permuted_among_segments[
+                                datapoint_idx : datapoint_idx + batch.batch_size
+                            ].to(pl_module.device)
+                            acc_permuted_among_segments += (
+                                pl_module.compute_accuracy_tensor(
+                                    batch,
+                                    receiver.forward(
+                                        message=msg_permuted_among_segments,
+                                        message_length=SenderOutput.compute_message_length(
+                                            msg_permuted_among_segments,
+                                            sender.fix_message_length,
+                                        ),
+                                        message_mask=SenderOutput.compute_message_mask(
+                                            msg_permuted_among_segments,
+                                            sender.fix_message_length,
+                                        ),
+                                        candidates=batch.candidates,
+                                    ),
+                                )
+                                .sum()
+                                .item()
+                            )
+
+                            msg_permuted_within_segments = messages_permuted_within_segments[
+                                datapoint_idx : datapoint_idx + batch.batch_size
+                            ].to(pl_module.device)
+                            acc_permuted_within_segments += (
+                                pl_module.compute_accuracy_tensor(
+                                    batch,
+                                    receiver.forward(
+                                        message=msg_permuted_within_segments,
+                                        message_length=SenderOutput.compute_message_length(
+                                            msg_permuted_within_segments,
+                                            sender.fix_message_length,
+                                        ),
+                                        message_mask=SenderOutput.compute_message_mask(
+                                            msg_permuted_within_segments,
+                                            sender.fix_message_length,
+                                        ),
+                                        candidates=batch.candidates,
+                                    ),
+                                )
+                                .sum()
+                                .item()
+                            )
+
+                            datapoint_idx += batch.batch_size
+
+                        acc_permuted_among_segments /= datapoint_idx
+                        acc_permuted_within_segments /= datapoint_idx
+
+                        pl_module.log_dict(
+                            {
+                                f"val_acc_permuted_among_segments/dataloader_{dataloader_idx}/sender_idx_{sender_idx}/receiver_idx_{receiver_idx}/beam_size_{self.beam_size}/threshold_{thr}": acc_permuted_among_segments,
+                                f"val_acc_permuted_within_segments/dataloader_{dataloader_idx}/sender_idx_{sender_idx}/receiver_idx_{receiver_idx}/beam_size_{self.beam_size}/threshold_{thr}": acc_permuted_within_segments,
+                            },
+                            add_dataloader_idx=False,
+                        )

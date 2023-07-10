@@ -5,11 +5,10 @@ from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import get_constant_schedule_with_warmup
 import torch
-import itertools
 
 from ...data.batch import Batch
 from ..sender import SenderBase
-from ..receiver import ReceiverBase
+from ..receiver import ReceiverBase, ReceiverOutput
 from ..message_prior import MessagePriorBase
 from .baseline import InputDependentBaseline
 from .game_output import GameOutput, GameOutputGumbelSoftmax
@@ -106,6 +105,17 @@ class GameBase(LightningModule):
         receiver_index: Optional[int] = None,
     ) -> GameOutputGumbelSoftmax:
         raise NotImplementedError()
+
+    def compute_accuracy_tensor(
+        self,
+        batch: Batch,
+        receiver_output: ReceiverOutput,
+    ):
+        matching_count = (receiver_output.last_logits.argmax(dim=-1) == batch.target_label).long()
+        while matching_count.dim() > 1:
+            matching_count = matching_count.sum(dim=-1)
+        acc = (matching_count == torch.prod(torch.as_tensor(batch.target_label.shape[1:], device=self.device))).float()
+        return acc
 
     def training_step(
         self,
