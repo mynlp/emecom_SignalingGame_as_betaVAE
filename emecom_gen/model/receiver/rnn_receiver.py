@@ -1,10 +1,9 @@
 from torch.nn import Embedding, RNNCell, GRUCell, LSTMCell, LayerNorm, Identity
 from torch import Tensor
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal
 import torch
 from torch.nn.parameter import Parameter
 from torch.nn import functional as F
-from torch.distributions.categorical import Categorical
 
 from ..symbol_prediction_layer import SymbolPredictionLayer
 from ..message_prior import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
@@ -21,13 +20,10 @@ class RnnReceiverBase(ReceiverBase):
         hidden_size: int,
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
-        enable_symbol_prediction: bool = False,
         enable_impatience: bool = False,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
-        symbol_prediction_layer_bias: bool = True,
-        symbol_prediction_layer_descending: bool = False,
-        symbol_prediction_layer_fixed_prob_eos: Optional[float] = None,
+        symbol_prediction_layer: SymbolPredictionLayer | None = None,
     ) -> None:
         super().__init__()
 
@@ -49,18 +45,12 @@ class RnnReceiverBase(ReceiverBase):
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
 
-        if enable_symbol_prediction:
-            self.symbol_predictor = SymbolPredictionLayer(
-                hidden_size,
-                vocab_size,
-                bias=symbol_prediction_layer_bias,
-                descending=symbol_prediction_layer_descending,
-                fixed_prob_eos=symbol_prediction_layer_fixed_prob_eos,
-            )
-            self.bos_embedding = Parameter(torch.zeros(embedding_dim))
-        else:
-            self.symbol_predictor = None
+        self.symbol_prediction_layer = symbol_prediction_layer
+
+        if symbol_prediction_layer is None:
             self.bos_embedding = None
+        else:
+            self.bos_embedding = Parameter(torch.zeros(embedding_dim))
 
         match cell_type:
             case "rnn":
@@ -79,7 +69,7 @@ class RnnReceiverBase(ReceiverBase):
     def _compute_logits_from_hidden_state(
         self,
         hidden_state: Tensor,
-        candidates: Optional[Tensor],
+        candidates: Tensor | None,
     ) -> Tensor:
         raise NotImplementedError()
 
@@ -173,17 +163,18 @@ class RnnReceiverBase(ReceiverBase):
         message: Tensor,
         message_length: Tensor,
         message_mask: Tensor,
-        candidates: Optional[Tensor] = None,
+        candidates: Tensor | None = None,
     ):
         hidden_states = self._compute_hidden_states(message)
 
-        if self.bos_embedding is not None and self.symbol_predictor is not None:
+        if self.symbol_prediction_layer is not None:
+            assert self.symbol_embedding is not None
             hidden_states_for_object_prediction = hidden_states[:, 1:]  # the first object logits is not necessary
             hidden_states_for_symbol_prediction = hidden_states[:, :-1]  # the last symbol logits is not necessary
 
             message_prior_output = MessagePriorOutput(
                 message_log_probs=F.cross_entropy(
-                    input=self.symbol_predictor.forward(
+                    input=self.symbol_prediction_layer.forward(
                         hidden_states_for_symbol_prediction,
                     ).permute(
                         0, 2, 1
@@ -233,94 +224,10 @@ class RnnReceiverBase(ReceiverBase):
             message_prior_output=message_prior_output,
         )
 
-    def compute_incrementality_loss(
-        self,
-        batch_size: int,
-        max_len: int,
-        fix_message_length: bool,
-        device: torch.device,
-        candidates: Optional[Tensor] = None,
-        update_object_predictor: bool = True,
-        update_symbol_predictor: bool = False,
-        temperature_parameter: float = 0,
-    ) -> Tensor:
-        assert self.bos_embedding is not None and self.symbol_predictor is not None
-        assert max_len > 1
-
-        h = torch.zeros(size=(batch_size, self.hidden_size), device=device)
-        c = torch.zeros_like(h)
-        e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
-
-        h_dropout = self._make_dropout_function(h)
-        e_dropout = self._make_dropout_function(e)
-
-        e = e_dropout(e)
-
-        symbol_list: list[Tensor] = []
-        symbol_logits_list: list[Tensor] = []
-        object_logits_list: list[Tensor] = []
-
-        for step in range(max_len):
-            h, c = self._step_hidden_state(e, h, c, h_dropout)
-            step_logits = self.symbol_predictor.forward(h)
-
-            if not fix_message_length and step == max_len - 1:
-                s = torch.zeros(size=(batch_size,), device=device, dtype=torch.long)
-            if self.training:
-                s = Categorical(logits=step_logits).sample()
-            else:
-                s = step_logits.argmax(dim=-1)
-
-            e = e_dropout(self.symbol_embedding.forward(s))
-
-            symbol_list.append(s)
-            symbol_logits_list.append(step_logits)
-            object_logits_list.append(self._compute_logits_from_hidden_state(h, candidates))
-
-        message = torch.stack(symbol_list, dim=1)
-        symbol_logits = torch.stack(symbol_logits_list, dim=1)
-        object_logits = torch.stack(object_logits_list, dim=1)
-
-        if fix_message_length:
-            message_mask = torch.ones_like(message, dtype=torch.float)
-        else:
-            is_eos = (message == 0).long()
-            message_mask = ((is_eos.cumsum(dim=-1) - is_eos) == 0).float()
-
-        message_log_probs = (
-            F.cross_entropy(
-                input=symbol_logits.permute(0, 2, 1),
-                target=message,
-                reduction="none",
-            ).neg()
-            * message_mask
-        )
-
-        object_log_softmax = object_logits.log_softmax(dim=2)
-        object_kl_divs = (
-            object_log_softmax[:, 1:].exp() * (object_log_softmax[:, 1:] - object_log_softmax[:, :-1])
-        ).sum(dim=2) * message_mask[:, 1:]
-
-        loss = torch.zeros((), device=device)
-
-        if update_object_predictor:
-            loss = loss + object_kl_divs.sum(dim=1)
-        if update_symbol_predictor:
-            neg_rewards = (object_kl_divs + temperature_parameter * message_log_probs).detach()
-            neg_returns = neg_rewards + torch.sum(neg_rewards, dim=1, keepdim=True) - torch.cumsum(neg_rewards, dim=1)
-            loss = (
-                loss
-                + (neg_returns - neg_returns.mean(dim=0, keepdim=True))
-                / neg_returns.std(dim=0, unbiased=False, keepdim=True)
-                * message_log_probs
-            )
-
-        return loss
-
     def forward_gumbel_softmax(
         self,
         message: Tensor,
-        candidates: Optional[Tensor] = None,
+        candidates: Tensor | None = None,
     ) -> ReceiverOutputGumbelSoftmax:
         batch_size = message.shape[0]
         device = message.device
@@ -350,8 +257,8 @@ class RnnReceiverBase(ReceiverBase):
             h = self.h_layer_norm.forward(h)
             step_logits = self._compute_logits_from_hidden_state(h, candidates)
             logits_list.append(step_logits)
-            if self.symbol_predictor is not None:
-                symbol_logits_list.append(self.symbol_predictor.forward(h))
+            if self.symbol_prediction_layer is not None:
+                symbol_logits_list.append(self.symbol_prediction_layer.forward(h))
 
         if len(symbol_logits_list) > 0:
             symbol_logits_list.pop(-1)  # the last symbol logits is not necessary
@@ -376,13 +283,10 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         hidden_size: int,
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
-        enable_symbol_prediction: bool = False,
         enable_impatience: bool = False,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
-        symbol_prediction_layer_bias: bool = True,
-        symbol_prediction_layer_descending: bool = False,
-        symbol_prediction_layer_fixed_prob_eos: Optional[float] = None,
+        symbol_prediction_layer: SymbolPredictionLayer | None = None,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -391,13 +295,10 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
-            enable_symbol_prediction=enable_symbol_prediction,
             enable_impatience=enable_impatience,
             dropout_p=dropout_p,
             dropout_type=dropout_type,
-            symbol_prediction_layer_bias=symbol_prediction_layer_bias,
-            symbol_prediction_layer_descending=symbol_prediction_layer_descending,
-            symbol_prediction_layer_fixed_prob_eos=symbol_prediction_layer_fixed_prob_eos,
+            symbol_prediction_layer=symbol_prediction_layer,
         )
 
         self.object_decoder = object_decoder
@@ -405,7 +306,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
     def _compute_logits_from_hidden_state(
         self,
         hidden_state: Tensor,
-        candidates: Optional[Tensor],
+        candidates: Tensor | None,
     ) -> Tensor:
         return self.object_decoder(hidden_state)
 
@@ -420,13 +321,10 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         hidden_size: int,
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
-        enable_symbol_prediction: bool = False,
         enable_impatience: bool = False,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
-        symbol_prediction_layer_bias: bool = True,
-        symbol_prediction_layer_descending: bool = False,
-        symbol_prediction_layer_fixed_prob_eos: Optional[float] = None,
+        symbol_prediction_layer: SymbolPredictionLayer | None = None,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -435,13 +333,10 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             hidden_size=hidden_size,
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
-            enable_symbol_prediction=enable_symbol_prediction,
             enable_impatience=enable_impatience,
             dropout_p=dropout_p,
             dropout_type=dropout_type,
-            symbol_prediction_layer_bias=symbol_prediction_layer_bias,
-            symbol_prediction_layer_descending=symbol_prediction_layer_descending,
-            symbol_prediction_layer_fixed_prob_eos=symbol_prediction_layer_fixed_prob_eos,
+            symbol_prediction_layer=symbol_prediction_layer,
         )
 
         self.object_encoder = object_encoder
@@ -449,7 +344,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
     def _compute_logits_from_hidden_state(
         self,
         hidden_state: Tensor,
-        candidates: Optional[Tensor],
+        candidates: Tensor | None,
     ) -> Tensor:
         assert candidates is not None, f"`candidates` must not be `None` for {self.__class__.__name__}."
 

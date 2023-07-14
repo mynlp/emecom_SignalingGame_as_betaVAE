@@ -38,8 +38,8 @@ class CommonArgumentParser(Tap):
     receiver_dropout_p: float = 0  # Receiver's dropout rate.
     receiver_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Receiver's dropout type.
     receiver_symbol_prediction_layer_bias: bool = True
-    receiver_symbol_prediction_layer_descending: bool = False
-    receiver_symbol_prediction_layer_fixed_prob_eos: Optional[float] = None
+    receiver_symbol_prediction_layer_eos_type: Literal["trainable-softmax", "trainable-sigmoid"] | float | None = None
+    receiver_symbol_prediction_layer_stick_breaking: bool = False
 
     sender_update_prob: float = 1
     receiver_update_prob: float = 1

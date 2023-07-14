@@ -27,14 +27,13 @@ class RnnReinforceSender(SenderBase):
         embedding_dim: int,
         hidden_size: int,
         fix_message_length: bool,
+        symbol_prediction_layer: SymbolPredictionLayer,
         gs_temperature: float = 1,
         gs_straight_through: bool = True,
         enable_layer_norm: bool = True,
         enable_residual_connection: bool = True,
         dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
         dropout_p: float = 0,
-        symbol_prediction_layer_bias: bool = True,
-        symbol_prediction_layer_descending: bool = False,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -52,12 +51,7 @@ class RnnReinforceSender(SenderBase):
         )
         self.embedding = Embedding(vocab_size, embedding_dim)
         self.bos_embedding = Parameter(torch.zeros(embedding_dim))
-        self.symbol_predictor = SymbolPredictionLayer(
-            hidden_size,
-            vocab_size,
-            bias=symbol_prediction_layer_bias,
-            descending=symbol_prediction_layer_descending,
-        )
+        self.symbol_prediction_layer = symbol_prediction_layer
         self.value_estimator = ValueEstimationLayer(hidden_size)
 
         if enable_layer_norm:
@@ -178,7 +172,7 @@ class RnnReinforceSender(SenderBase):
         for step in range(num_steps):
             h, c = self._step_hidden_state(e, h, c, h_dropout)
 
-            step_logits = self.symbol_predictor.forward(h)
+            step_logits = self.symbol_prediction_layer.forward(h)
             step_estimated_value = self.value_estimator.forward(h.detach())
 
             if forced_message is not None:
@@ -244,7 +238,7 @@ class RnnReinforceSender(SenderBase):
 
             h = self.h_layer_norm.forward(h)
 
-            step_logits = self.symbol_predictor.forward(h)
+            step_logits = self.symbol_prediction_layer.forward(h)
 
             if forced_message is not None:
                 symbol = forced_message[:, step]

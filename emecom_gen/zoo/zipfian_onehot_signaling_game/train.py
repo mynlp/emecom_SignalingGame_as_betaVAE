@@ -25,6 +25,7 @@ from ...model.game import (
     AccuracyBasedBetaScheduler,
     InputDependentBaseline,
 )
+from ...model.symbol_prediction_layer import SymbolPredictionLayer
 from ..common_argparser import CommonArgumentParser
 
 
@@ -141,6 +142,10 @@ def main():
             embedding_dim=args.sender_embedding_dim,
             hidden_size=args.sender_hidden_size,
             fix_message_length=False,
+            symbol_prediction_layer=SymbolPredictionLayer(
+                hidden_size=args.sender_hidden_size,
+                vocab_size=args.vocab_size,
+            ),
             enable_layer_norm=args.sender_layer_norm,
             enable_residual_connection=args.sender_residual_connection,
             dropout_p=args.sender_dropout_p,
@@ -161,13 +166,18 @@ def main():
             hidden_size=args.receiver_hidden_size,
             enable_layer_norm=args.receiver_layer_norm,
             enable_residual_connection=args.receiver_residual_connection,
-            enable_symbol_prediction=(args.prior_type == "receiver"),
             enable_impatience=args.receiver_impatience,
             dropout_p=args.receiver_dropout_p,
             dropout_type=args.receiver_dropout_type,
-            symbol_prediction_layer_bias=args.receiver_symbol_prediction_layer_bias,
-            symbol_prediction_layer_descending=args.receiver_symbol_prediction_layer_descending,
-            symbol_prediction_layer_fixed_prob_eos=args.receiver_symbol_prediction_layer_fixed_prob_eos,
+            symbol_prediction_layer=SymbolPredictionLayer(
+                hidden_size=args.receiver_hidden_size,
+                vocab_size=args.vocab_size,
+                bias=args.receiver_symbol_prediction_layer_bias,
+                eos_type=args.receiver_symbol_prediction_layer_eos_type,
+                stick_breaking=args.receiver_symbol_prediction_layer_stick_breaking,
+            )
+            if args.prior_type == "receiver"
+            else None,
         )
         for _ in range(args.n_agent_pairs)
     ]
