@@ -5,6 +5,14 @@ from logzero import logger
 from datetime import datetime
 
 
+def to_eos_type(string: str) -> Literal["trainable-softmax", "trainable-sigmoid"] | float | None:
+    match string:
+        case "trainable-softmax" | "trainable-sigmoid":
+            return string
+        case float_str:
+            return float(float_str)
+
+
 class CommonArgumentParser(Tap):
     n_agent_pairs: int = 1  # Number of agent pairs.
 
@@ -99,6 +107,9 @@ class CommonArgumentParser(Tap):
             datetime_info = "date" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             logger.info(f"Append `{datetime_info}` to `experiment_version`.")
             self.experiment_version = "_".join([self.experiment_version, datetime_info])
+
+    def configure(self):
+        self.add_argument("--receiver_symbol_prediction_layer_eos_type", type=to_eos_type)
 
     def __init__(
         self,
