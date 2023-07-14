@@ -67,24 +67,27 @@ class SymbolPredictionLayer(Module):
         self,
         input: Tensor,
     ) -> Tensor:
-        assert input.dim() == 2, input.shape
-
         output = self.linear.forward(input)
 
-        batch_size, device = input.shape[0], input.device
+        device = input.device
         match self.eos_type:
             case "fixed":
+                original_shape = output.shape
+                output = output.flatten(0, -2)
                 output = torch.cat(
                     [
-                        torch.full(size=(batch_size, 1), fill_value=self.fixed_log_prob_eos, device=device),
-                        torch.full(size=(batch_size, 1), fill_value=self.fixed_log_prob_not_eos, device=device)
+                        torch.full(size=(output.shape[0], 1), fill_value=self.fixed_log_prob_eos, device=device),
+                        torch.full(size=(output.shape[0], 1), fill_value=self.fixed_log_prob_not_eos, device=device)
                         + output[:, 1:].log_softmax(dim=1),
                     ],
                     dim=1,
                 )
+                output = output.reshape(*original_shape)
             case "trainable-sigmoid":
+                original_shape = output.shape
+                output = output.flatten(0, -2)
                 if self.stick_breaking:
-                    zeros = torch.zeros(size=(batch_size, 1), device=device)
+                    zeros = torch.zeros(size=(output.shape[0], 1), device=device)
                     log_probs = torch.cat([logsigmoid(output[:, :-1]), zeros], dim=1)
                     log_probs_not = torch.cat([zeros, logsigmoid(output[:, 1:].neg())], dim=1)
                     output = log_probs + log_probs_not.cumsum(dim=1)
@@ -92,6 +95,7 @@ class SymbolPredictionLayer(Module):
                     log_prob_eos = logsigmoid(output[:, :1])
                     log_prob_not_eos = logsigmoid(output[:, :1].neg())
                     output = torch.cat([log_prob_eos, log_prob_not_eos + output[:, 1:].log_softmax(dim=1)], dim=1)
+                output = output.reshape(*original_shape)
             case "trainable-softmax":
                 pass  # Do nothing.
 
