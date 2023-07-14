@@ -82,7 +82,7 @@ class SymbolPredictionLayer(Module):
                     ],
                     dim=1,
                 )
-            case "trainable-bernoulli":
+            case "trainable-sigmoid":
                 if self.stick_breaking:
                     zeros = torch.zeros(size=(batch_size, 1), device=device)
                     log_probs = torch.cat([logsigmoid(output[:, :-1]), zeros], dim=1)
