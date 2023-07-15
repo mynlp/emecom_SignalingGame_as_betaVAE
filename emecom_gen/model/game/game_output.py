@@ -27,7 +27,7 @@ class GameOutput:
             nans.append("self.sender_output.message_log_probs")
         if self.message_prior_output is not None and self.message_prior_output.message_log_probs.isnan().any().item():
             nans.append("self.message_prior_output.message_log_probs")
-        assert len(nans) == 0, f"NaN values found in: {nans}"
+        assert len(nans) == 0, f"NaN values found in {nans}, in class instance {self}"
 
     def make_log_dict(
         self,
