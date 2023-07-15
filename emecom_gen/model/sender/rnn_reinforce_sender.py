@@ -332,7 +332,7 @@ class RnnReinforceSender(SenderBase):
 
             # output_log_prob_score: size (batch_size, beam_size, vocab_size)
             output_log_prob_score = (
-                (self.symbol_predictor.forward(h) + logits_mask_for_finished_decoding) / temperature
+                (self.symbol_prediction_layer.forward(h) + logits_mask_for_finished_decoding) / temperature
             ).log_softmax(dim=2)
 
             indices: Tensor  # type hinting
