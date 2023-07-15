@@ -17,6 +17,19 @@ def shape_keeping_argmax(x: Tensor) -> Tensor:
     return torch.zeros_like(x).scatter_(-1, x.argmax(dim=-1, keepdim=True), 1)
 
 
+def topk(
+    input: Tensor,
+    k: int,
+    dim: int | None = None,
+    largest: bool = True,
+    sorted: bool = True,
+) -> tuple[Tensor, Tensor]:
+    """
+    torck.topk wrapper just for supporting type-hints.
+    """
+    return torch.topk(input=input, k=k, dim=dim, largest=largest, sorted=sorted)  # type: ignore
+
+
 class RnnReinforceSender(SenderBase):
     def __init__(
         self,
@@ -335,8 +348,7 @@ class RnnReinforceSender(SenderBase):
                 (self.symbol_prediction_layer.forward(h) + logits_mask_for_finished_decoding) / temperature
             ).log_softmax(dim=2)
 
-            indices: Tensor  # type hinting
-            topk_log_prob_scores, indices = torch.topk(
+            topk_log_prob_scores, indices = topk(
                 (output_log_prob_score + topk_log_prob_scores.reshape(batch.batch_size, beam_size, 1)).reshape(
                     batch.batch_size, beam_size * self.vocab_size
                 ),
@@ -344,8 +356,6 @@ class RnnReinforceSender(SenderBase):
                 dim=1,
                 sorted=True,
             )
-            assert isinstance(topk_log_prob_scores, Tensor)
-            assert isinstance(indices, Tensor)
 
             topk_outputs = indices % self.vocab_size
             topk_history_indices = (indices / self.vocab_size).long()
