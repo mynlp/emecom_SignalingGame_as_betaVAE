@@ -33,6 +33,9 @@ class CommonArgumentParser(Tap):
     sender_weight_decay: float = 0  # Sender's weight decay.
     sender_dropout_p: float = 0  # Sender's dropout rate.
     sender_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Sender's dropout type.
+    sender_symbol_prediction_layer_bias: bool = True
+    sender_symbol_prediction_layer_eos_type: Literal["trainable-softmax", "trainable-sigmoid"] | float | None = None
+    sender_symbol_prediction_layer_stick_breaking: bool = False
 
     receiver_embedding_dim: int = 10  # Receiver's embedding dim.
     receiver_hidden_size: int = 128  # Receiver's hidden size.

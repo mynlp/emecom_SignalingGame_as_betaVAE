@@ -146,6 +146,9 @@ def main():
             symbol_prediction_layer=SymbolPredictionLayer(
                 hidden_size=args.sender_hidden_size,
                 vocab_size=args.vocab_size,
+                bias=args.sender_symbol_prediction_layer_bias,
+                eos_type=args.sender_symbol_prediction_layer_eos_type,
+                stick_breaking=args.sender_symbol_prediction_layer_stick_breaking,
             ),
             enable_layer_norm=args.sender_layer_norm,
             enable_residual_connection=args.sender_residual_connection,
