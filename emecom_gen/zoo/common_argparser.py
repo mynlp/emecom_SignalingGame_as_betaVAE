@@ -112,6 +112,7 @@ class CommonArgumentParser(Tap):
             self.experiment_version = "_".join([self.experiment_version, datetime_info])
 
     def configure(self):
+        self.add_argument("--sender_symbol_prediction_layer_eos_type", type=to_eos_type)
         self.add_argument("--receiver_symbol_prediction_layer_eos_type", type=to_eos_type)
 
     def __init__(
