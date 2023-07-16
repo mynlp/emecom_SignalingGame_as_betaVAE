@@ -45,6 +45,12 @@ class SymbolPredictionLayer(Module):
         self.linear = Linear(hidden_size, vocab_size, bias=bias)
         self.stick_breaking = stick_breaking
 
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.nn.init.zeros_(self.linear.weight)
+        torch.nn.init.zeros_(self.linear.bias)
+
     @property
     def eos_type(self):
         return self.__eos_type
