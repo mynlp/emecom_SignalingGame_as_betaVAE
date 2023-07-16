@@ -19,15 +19,31 @@ class GameOutput:
 
     def __post_init__(self):
         nans: list[str] = []
+        infs: list[str] = []
         if self.loss.isnan().any().item():
             nans.append("self.loss")
+        if self.loss.isinf().any().item():
+            infs.append("self.loss")
         if self.communication_loss.isnan().any().item():
             nans.append("self.communication_loss")
-        if self.sender_output is not None and self.sender_output.message_log_probs.isnan().any().item():
-            nans.append("self.sender_output.message_log_probs")
-        if self.message_prior_output is not None and self.message_prior_output.message_log_probs.isnan().any().item():
-            nans.append("self.message_prior_output.message_log_probs")
-        assert len(nans) == 0, f"NaN values found in {nans}, in class instance {self}"
+        if self.communication_loss.isinf().any().item():
+            infs.append("self.communication_loss")
+        if self.sender_output is not None:
+            if self.sender_output.message_log_probs.isnan().any().item():
+                nans.append("self.sender_output.message_log_probs")
+            if self.sender_output.message_log_probs.isinf().any().item():
+                infs.append("self.sender_output.message_log_probs")
+        if self.message_prior_output is not None:
+            if self.message_prior_output.message_log_probs.isnan().any().item():
+                nans.append("self.message_prior_output.message_log_probs")
+            if self.message_prior_output.message_log_probs.isinf().any().item():
+                infs.append("self.message_prior_output.message_log_probs")
+        if self.baseline_loss is not None:
+            if self.baseline_loss.isnan().any().item():
+                nans.append("self.baseline_loss")
+            if self.baseline_loss.isinf().any().item():
+                infs.append("self.baseline_loss")
+        assert len(nans) == 0 and len(infs) == 0, f"NaN values found in {nans} and inf values found in {infs}."
 
     def make_log_dict(
         self,
