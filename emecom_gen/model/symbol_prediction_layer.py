@@ -43,13 +43,15 @@ class SymbolPredictionLayer(Module):
                 self.__fixed_log_prob_not_eos = math.log(1.0 - f)
 
         self.linear = Linear(hidden_size, vocab_size, bias=bias)
+        self.linear.reset_parameters = lambda: None
         self.stick_breaking = stick_breaking
 
         self.reset_parameters()
 
     def reset_parameters(self):
         torch.nn.init.zeros_(self.linear.weight)
-        torch.nn.init.zeros_(self.linear.bias)
+        if self.linear.bias is not None:
+            torch.nn.init.zeros_(self.linear.bias)
 
     @property
     def eos_type(self):
