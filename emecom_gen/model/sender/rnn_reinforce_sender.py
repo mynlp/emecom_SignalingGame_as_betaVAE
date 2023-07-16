@@ -188,6 +188,8 @@ class RnnReinforceSender(SenderBase):
             step_logits = self.symbol_prediction_layer.forward(h)
             step_estimated_value = self.value_estimator.forward(h.detach())
 
+            assert step_logits.isnan().logical_not().any(), f"step={step},\nstep_logits={step_logits},\nh={h}."
+
             if forced_message is not None:
                 symbol = forced_message[:, step]
             elif self.training:
