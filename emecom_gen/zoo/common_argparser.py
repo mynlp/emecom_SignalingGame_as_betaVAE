@@ -41,7 +41,6 @@ class CommonArgumentParser(Tap):
     receiver_hidden_size: int = 128  # Receiver's hidden size.
     receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # Receiver's RNN cell type.
     receiver_impatience: bool = False  # Wether to enable receiver's impatience.
-    receiver_incrementality: bool = False  # Wether to enable receiver's incrementality.
     receiver_layer_norm: bool = False  # Wether to enable receiver's LayerNorm.
     receiver_residual_connection: bool = False  # Wether to enable receiver's residual connection.
     receiver_lr: float = 1e-4  # Receiver's learning rate.

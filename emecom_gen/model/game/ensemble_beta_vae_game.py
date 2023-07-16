@@ -37,7 +37,6 @@ class EnsembleBetaVAEGame(GameBase):
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
         gumbel_softmax_mode: bool = False,
-        receiver_incrementality: bool = False,
         accumulate_grad_batches: int = 1,
     ) -> None:
         super().__init__(
@@ -60,7 +59,6 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.beta_scheduler = beta_scheduler
         self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
-        self.receiver_incrementality = receiver_incrementality
 
     def forward(
         self,
@@ -107,19 +105,24 @@ class EnsembleBetaVAEGame(GameBase):
         while communication_loss.dim() > 1:
             communication_loss = communication_loss.sum(dim=-1)
 
-        loss_s = (
+        loss_s = torch.where(
+            mask > 0,
             communication_loss.detach().unsqueeze(1)
             + beta
-            * inversed_cumsum((output_s.message_log_probs.detach() - output_p.message_log_probs.detach()) * mask, dim=1)
-        ) * mask
+            * inversed_cumsum(
+                torch.where(mask > 0, output_s.message_log_probs.detach() - output_p.message_log_probs.detach(), 0),
+                dim=1,
+            ),
+            0,
+        )
 
         match self.baseline:
             case "batch-mean":
-                baseline = loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
+                baseline = (loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)).expand_as(mask)
             case "baseline-from-sender":
-                baseline = output_s.estimated_value * mask
+                baseline = torch.where(mask > 0, output_s.estimated_value, 0)
             case "none":
-                baseline = torch.as_tensor(0, dtype=torch.float, device=self.device)
+                baseline = torch.zeros_like(mask)
             case b:
                 assert isinstance(b, InputDependentBaseline)
                 baseline = b.forward(
@@ -143,26 +146,18 @@ class EnsembleBetaVAEGame(GameBase):
                 )
 
         loss_r = communication_loss
-        loss_p = (output_p.message_log_probs * mask).sum(dim=-1).neg() * beta
+        loss_p = torch.where(mask > 0, output_p.message_log_probs, 0).sum(dim=-1).neg() * beta
 
-        baseline_loss = ((loss_s - baseline).square() * mask).sum(dim=-1)
+        baseline_loss = torch.where(mask > 0, (loss_s - baseline).square(), 0).sum(dim=-1)
 
         surrogate_loss = (
             loss_r
             + loss_p
-            + ((loss_s - baseline.detach()) * mask * output_s.message_log_probs / denominator).sum(dim=-1)
+            + torch.where(mask > 0, (loss_s - baseline.detach()) * output_s.message_log_probs / denominator, 0).sum(
+                dim=-1
+            )
             + baseline_loss
         )
-
-        if self.receiver_incrementality:
-            assert prior == "receiver"
-            surrogate_loss = surrogate_loss + receiver.compute_incrementality_loss(
-                batch_size=batch.batch_size,
-                max_len=output_s.message.shape[1],
-                fix_message_length=output_s.fix_message_length,
-                device=self.device,
-                candidates=batch.candidates,
-            )
 
         return GameOutput(
             loss=surrogate_loss,
