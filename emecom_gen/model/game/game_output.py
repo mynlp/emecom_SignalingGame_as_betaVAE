@@ -44,8 +44,8 @@ class GameOutput:
             if self.baseline_loss.isinf().any().item():
                 infs.append("self.baseline_loss")
         assert len(nans) == 0 and len(infs) == 0, f"NaN values found in {nans} and inf values found in {infs}."
-        assert self.loss.mean().isnan().any().logical_not()
-        assert self.loss.mean().isinf().any().logical_not()
+        assert self.loss.mean().isnan().any().logical_not().item()
+        assert self.loss.mean().isinf().any().logical_not().item()
 
     def make_log_dict(
         self,
