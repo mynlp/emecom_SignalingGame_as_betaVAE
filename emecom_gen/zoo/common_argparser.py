@@ -87,6 +87,7 @@ class CommonArgumentParser(Tap):
     append_datetime_in_experiment_version: bool = False
 
     save_checkpoint_every: int = 0
+    log_every_n_steps: int = 1
     check_val_every_n_epoch: int = 1
     accumulate_grad_batches: int = 1
     accelerator: Literal["cpu", "gpu"] = "gpu"
