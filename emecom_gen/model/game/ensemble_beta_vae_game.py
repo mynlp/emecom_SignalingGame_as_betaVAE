@@ -148,16 +148,18 @@ class EnsembleBetaVAEGame(GameBase):
         loss_r = communication_loss
         loss_p = torch.where(mask > 0, output_p.message_log_probs, 0).sum(dim=-1).neg() * beta
 
-        baseline_loss = torch.where(mask > 0, (loss_s - baseline).square(), 0).sum(dim=-1)
-
         surrogate_loss = (
             loss_r
             + loss_p
             + torch.where(mask > 0, (loss_s - baseline.detach()) * output_s.message_log_probs / denominator, 0).sum(
                 dim=-1
             )
-            + baseline_loss
         )
+
+        baseline_loss = torch.where(mask > 0, (loss_s - baseline).square(), 0).sum(dim=-1)
+
+        if baseline_loss.requires_grad:
+            surrogate_loss = surrogate_loss + baseline_loss
 
         return GameOutput(
             loss=surrogate_loss,
