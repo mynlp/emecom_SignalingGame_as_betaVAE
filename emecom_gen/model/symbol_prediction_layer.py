@@ -12,8 +12,7 @@ logsigmoid: Callable[[Tensor], Tensor]
 
 class SymbolPredictionLayer(Module):
     __eos_type: Literal["trainable-softmax", "trainable-sigmoid", "fixed"]
-    __fixed_log_prob_eos: float
-    __fixed_log_prob_not_eos: float
+    __fixed_eos_logit: float
 
     def __init__(
         self,
@@ -29,18 +28,13 @@ class SymbolPredictionLayer(Module):
             case "trainable-softmax" | None:
                 assert not stick_breaking
                 self.__eos_type = "trainable-softmax"
-                self.__fixed_log_prob_eos = 0
-                self.__fixed_log_prob_not_eos = 0
             case "trainable-sigmoid":
                 self.__eos_type = "trainable-sigmoid"
-                self.__fixed_log_prob_eos = 0
-                self.__fixed_log_prob_not_eos = 0
             case f:
                 assert isinstance(f, float)
                 assert not stick_breaking
                 self.__eos_type = "fixed"
-                self.__fixed_log_prob_eos = math.log(f)
-                self.__fixed_log_prob_not_eos = math.log(1.0 - f)
+                self.__fixed_eos_logit = math.log(f) - math.log(1.0 - f)
 
         self.linear = Linear(hidden_size, vocab_size, bias=bias)
         self.linear.reset_parameters = lambda: None
@@ -58,12 +52,8 @@ class SymbolPredictionLayer(Module):
         return self.__eos_type
 
     @property
-    def fixed_log_prob_eos(self):
-        return self.__fixed_log_prob_eos
-
-    @property
-    def fixed_log_prob_not_eos(self):
-        return self.__fixed_log_prob_not_eos
+    def fixed_eos_logit(self):
+        return self.__fixed_eos_logit
 
     def __call__(
         self,
@@ -80,30 +70,33 @@ class SymbolPredictionLayer(Module):
         device = input.device
         match self.eos_type:
             case "fixed":
-                original_shape = output.shape
-                output = output.flatten(0, -2)
+                eos_logit, other_logits = torch.split(output, [1, output.shape[-1] - 1], dim=-1)
+                eos_logit = torch.full_like(eos_logit, fill_value=self.fixed_eos_logit)
                 output = torch.cat(
                     [
-                        torch.full(size=(output.shape[0], 1), fill_value=self.fixed_log_prob_eos, device=device),
-                        torch.full(size=(output.shape[0], 1), fill_value=self.fixed_log_prob_not_eos, device=device)
-                        + output[:, 1:].log_softmax(dim=1),
+                        logsigmoid(eos_logit),
+                        logsigmoid(eos_logit.neg()) + other_logits.log_softmax(dim=-1),
                     ],
-                    dim=1,
+                    dim=-1,
                 )
-                output = output.reshape(*original_shape)
             case "trainable-sigmoid":
-                original_shape = output.shape
-                output = output.flatten(0, -2)
                 if self.stick_breaking:
+                    original_shape = output.shape
+                    output = output.flatten(0, -2)
                     zeros = torch.zeros(size=(output.shape[0], 1), device=device)
                     log_probs = torch.cat([logsigmoid(output[:, :-1]), zeros], dim=1)
                     log_probs_not = torch.cat([zeros, logsigmoid(output[:, 1:].neg())], dim=1)
                     output = log_probs + log_probs_not.cumsum(dim=1)
+                    output = output.reshape(*original_shape)
                 else:
-                    log_prob_eos = logsigmoid(output[:, :1])
-                    log_prob_not_eos = logsigmoid(output[:, :1].neg())
-                    output = torch.cat([log_prob_eos, log_prob_not_eos + output[:, 1:].log_softmax(dim=1)], dim=1)
-                output = output.reshape(*original_shape)
+                    eos_logit, other_logits = torch.split(output, [1, output.shape[-1] - 1], dim=-1)
+                    output = torch.cat(
+                        [
+                            logsigmoid(eos_logit),
+                            logsigmoid(eos_logit.neg()) + other_logits.log_softmax(dim=-1),
+                        ],
+                        dim=-1,
+                    )
             case "trainable-softmax":
                 pass  # Do nothing.
 
