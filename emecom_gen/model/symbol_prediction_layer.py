@@ -37,15 +37,7 @@ class SymbolPredictionLayer(Module):
                 self.__fixed_eos_logit = math.log(f) - math.log(1.0 - f)
 
         self.linear = Linear(hidden_size, vocab_size, bias=bias)
-        self.linear.reset_parameters = lambda: None
         self.stick_breaking = stick_breaking
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        torch.nn.init.zeros_(self.linear.weight)
-        if self.linear.bias is not None:
-            torch.nn.init.zeros_(self.linear.bias)
 
     @property
     def eos_type(self):
@@ -67,7 +59,6 @@ class SymbolPredictionLayer(Module):
     ) -> Tensor:
         output = self.linear.forward(input)
 
-        device = input.device
         match self.eos_type:
             case "fixed":
                 eos_logit, other_logits = torch.split(output, [1, output.shape[-1] - 1], dim=-1)
@@ -83,7 +74,7 @@ class SymbolPredictionLayer(Module):
                 if self.stick_breaking:
                     original_shape = output.shape
                     output = output.flatten(0, -2)
-                    zeros = torch.zeros(size=(output.shape[0], 1), device=device)
+                    zeros = torch.zeros(size=(output.shape[0], 1), device=input.device)
                     log_probs = torch.cat([logsigmoid(output[:, :-1]), zeros], dim=1)
                     log_probs_not = torch.cat([zeros, logsigmoid(output[:, 1:].neg())], dim=1)
                     output = log_probs + log_probs_not.cumsum(dim=1)
