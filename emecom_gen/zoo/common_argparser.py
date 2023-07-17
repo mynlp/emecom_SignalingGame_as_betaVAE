@@ -89,6 +89,7 @@ class CommonArgumentParser(Tap):
     save_checkpoint_every: int = 0
     log_every_n_steps: int = 1
     check_val_every_n_epoch: int = 1
+    track_grad_norm: str | int | float = -1
     accumulate_grad_batches: int = 1
     accelerator: Literal["cpu", "gpu"] = "gpu"
     devices: int = 1

@@ -300,6 +300,7 @@ def main():
         log_every_n_steps=args.log_every_n_steps,
         check_val_every_n_epoch=args.check_val_every_n_epoch,
         enable_progress_bar=args.enable_progress_bar,
+        track_grad_norm=args.track_grad_norm,
     )
 
     logger.info("Start fitting.")
