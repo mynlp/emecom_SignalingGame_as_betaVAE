@@ -305,6 +305,7 @@ def main():
 
     logger.info("Start fitting.")
 
+    torch.set_anomaly_enabled(args.enable_anomaly_detection)
     torch.set_float32_matmul_precision("high")
     trainer.fit(model=model, datamodule=datamodule)
 
