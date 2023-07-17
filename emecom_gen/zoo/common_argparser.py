@@ -13,6 +13,16 @@ def to_eos_type(string: str) -> Literal["trainable-softmax", "trainable-sigmoid"
             return float(float_str)
 
 
+def to_track_grad_norm(string: str) -> str | int | float:
+    try:
+        return int(string)
+    except Exception:
+        try:
+            return float(string)
+        except Exception:
+            return string
+
+
 class CommonArgumentParser(Tap):
     n_agent_pairs: int = 1  # Number of agent pairs.
 
@@ -115,6 +125,7 @@ class CommonArgumentParser(Tap):
     def configure(self):
         self.add_argument("--sender_symbol_prediction_layer_eos_type", type=to_eos_type)
         self.add_argument("--receiver_symbol_prediction_layer_eos_type", type=to_eos_type)
+        self.add_argument("--track_grad_norm", type=to_track_grad_norm)
 
     def __init__(
         self,
