@@ -171,7 +171,8 @@ class RnnReinforceSender(SenderBase):
         e = e_dropout(e)
 
         symbol_list: list[Tensor] = []
-        logits_list: list[Tensor] = []
+        log_prob_list: list[Tensor] = []
+        entropy_list: list[Tensor] = []
         estimated_value_list: list[Tensor] = []
 
         if forced_message is None:
@@ -190,34 +191,41 @@ class RnnReinforceSender(SenderBase):
 
             assert step_logits.isnan().logical_not().any(), f"step={step},\nstep_logits={step_logits},\nh={h}."
 
+            distr = Categorical(logits=step_logits)
+
             if forced_message is not None:
                 symbol = forced_message[:, step]
             elif self.training:
-                symbol = Categorical(logits=step_logits).sample()
+                symbol = distr.sample()
             else:
                 symbol = step_logits.argmax(dim=-1)
 
             e = self.e_layer_norm.forward(e_dropout(self.embedding.forward(symbol)))
 
             symbol_list.append(symbol)
-            logits_list.append(step_logits)
+            log_prob_list.append(distr.log_prob(symbol))
+            entropy_list.append(distr.entropy())
             estimated_value_list.append(step_estimated_value)
 
         message = torch.stack(symbol_list, dim=1)
-        logits = torch.stack(logits_list, dim=1)
+        log_probs = torch.stack(log_prob_list, dim=1)
+        entropies = torch.stack(entropy_list, dim=1)
         estimated_value = torch.stack(estimated_value_list, dim=1)
 
         if not self.fix_message_length:
             message = torch.cat([message, torch.zeros_like(message[:, -1:])], dim=1)
-            logits = torch.cat([logits, torch.zeros_like(logits[:, -1:])], dim=1)
+            log_probs = torch.cat([log_probs, torch.zeros_like(log_probs[:, -1:])], dim=1)
+            entropies = torch.cat([entropies, torch.zeros_like(entropies[:, -1:])], dim=1)
             estimated_value = torch.cat([estimated_value, torch.zeros_like(estimated_value[:, -1:])], dim=1)
 
         return SenderOutput(
             message=message,
-            logits=logits,
+            message_log_probs=log_probs,
+            entropies=entropies,
             estimated_value=estimated_value,
-            fix_message_length=self.fix_message_length,
             encoder_hidden_state=encoder_hidden_state,
+            fix_message_length=self.fix_message_length,
+            vocab_size=self.vocab_size,
         )
 
     def forward_gumbel_softmax(

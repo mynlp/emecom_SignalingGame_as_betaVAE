@@ -1,40 +1,29 @@
 from torch import Tensor
 import torch
-import torch.nn.functional as F
 import dataclasses
 
 
 @dataclasses.dataclass(frozen=True)
 class SenderOutput:
     message: Tensor
-    logits: Tensor
+    message_log_probs: Tensor
+    entropies: Tensor
     estimated_value: Tensor
-    fix_message_length: bool
     encoder_hidden_state: Tensor
+    vocab_size: int
+    fix_message_length: bool
 
     @property
     def device(self):
         return self.message.device
 
     @property
-    def message_log_probs(self) -> Tensor:
-        return F.cross_entropy(
-            input=self.logits.permute(0, 2, 1),
-            target=self.message,
-            reduction="none",
-        ).neg()
-
-    @property
-    def entropies(self) -> Tensor:
-        return (self.logits.softmax(dim=-1) * self.logits.log_softmax(dim=-1)).sum(dim=-1).neg() * self.message_mask
-
-    @property
     def normalized_entropies(self) -> Tensor:
-        return self.entropies / torch.as_tensor(self.logits.shape[-1], device=self.logits.device).log()
+        return self.entropies / torch.as_tensor(self.vocab_size, device=self.device).log()
 
     @property
     def message_entropy(self) -> Tensor:
-        return self.entropies.sum(dim=-1)
+        return torch.where(self.message_mask > 0, self.entropies, 0).sum(dim=-1)
 
     @property
     def message_length(self) -> Tensor:
