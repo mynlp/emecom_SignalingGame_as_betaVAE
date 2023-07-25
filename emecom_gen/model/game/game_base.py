@@ -40,7 +40,7 @@ class GameBase(LightningModule):
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
         num_warmup_steps: int = 0,
-        gradient_clip_val: float = 1,
+        gradient_clip_val: float = 10,
         gumbel_softmax_mode: bool = False,
         accumulate_grad_batches: int = 1,
     ) -> None:
