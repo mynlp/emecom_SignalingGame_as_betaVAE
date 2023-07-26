@@ -30,7 +30,7 @@ class EnsembleBetaVAEGame(GameBase):
         receiver_weight_decay: float = 0,
         beta_scheduler: BetaSchedulerBase = ConstantBetaScheduler(1),
         baseline: Literal["batch-mean", "baseline-from-sender", "none"] | InputDependentBaseline = "batch-mean",
-        reward_normalization_type: Literal["none", "std"] = "none",
+        reward_normalization_type: Literal["none", "std", "baseline-std"] = "none",
         optimizer_class: Literal["adam", "sgd"] = "sgd",
         num_warmup_steps: int = 100,
         sender_update_prob: float = 1,
@@ -58,7 +58,7 @@ class EnsembleBetaVAEGame(GameBase):
         )
 
         self.beta_scheduler = beta_scheduler
-        self.reward_normalization_type: Literal["none", "std"] = reward_normalization_type
+        self.reward_normalization_type: Literal["none", "std", "baseline-std"] = reward_normalization_type
 
     def forward(
         self,
@@ -138,13 +138,24 @@ class EnsembleBetaVAEGame(GameBase):
             case "none":
                 denominator = 1
             case "std":
+                sum_mask = mask.sum(dim=0, keepdim=True).clamp(min=1.0)
                 denominator = (
                     (
-                        loss_s.pow(2).sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
-                        - (loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)).pow(2)
+                        loss_s.square().sum(dim=0, keepdim=True) / sum_mask
+                        - (loss_s.sum(dim=0, keepdim=True) / sum_mask).square()
                     )
                     .sqrt()
-                    .clamp(min=1e-3)
+                    .clamp(min=torch.finfo(torch.float).eps)
+                )
+            case "baseline-std":
+                sum_mask = mask.sum(dim=0, keepdim=True).clamp(min=1.0)
+                denominator = (
+                    (
+                        baseline.square().sum(dim=0, keepdim=True) / sum_mask
+                        - (baseline.sum(dim=0, keepdim=True) / sum_mask).square()
+                    )
+                    .sqrt()
+                    .clamp(min=torch.finfo(torch.float).eps)
                 )
 
         loss_r = communication_loss
