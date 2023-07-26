@@ -156,6 +156,7 @@ class EnsembleBetaVAEGame(GameBase):
                     )
                     .sqrt()
                     .clamp(min=torch.finfo(torch.float).eps)
+                    .detach()
                 )
 
         loss_r = communication_loss
