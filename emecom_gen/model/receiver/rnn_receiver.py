@@ -18,6 +18,7 @@ class RnnReceiverBase(ReceiverBase):
         cell_type: Literal["rnn", "gru", "lstm"],
         embedding_dim: int,
         hidden_size: int,
+        cell_bias: bool = True,
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_impatience: bool = False,
@@ -54,11 +55,11 @@ class RnnReceiverBase(ReceiverBase):
 
         match cell_type:
             case "rnn":
-                self.cell = RNNCell(embedding_dim, hidden_size)
+                self.cell = RNNCell(embedding_dim, hidden_size, bias=cell_bias)
             case "gru":
-                self.cell = GRUCell(embedding_dim, hidden_size)
+                self.cell = GRUCell(embedding_dim, hidden_size, bias=cell_bias)
             case "lstm":
-                self.cell = LSTMCell(embedding_dim, hidden_size)
+                self.cell = LSTMCell(embedding_dim, hidden_size, bias=cell_bias)
 
         self.reset_parameters()
 
@@ -281,6 +282,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         cell_type: Literal["rnn", "gru", "lstm"],
         embedding_dim: int,
         hidden_size: int,
+        cell_bias: bool = True,
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_impatience: bool = False,
@@ -293,6 +295,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             cell_type=cell_type,
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
+            cell_bias=cell_bias,
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
             enable_impatience=enable_impatience,
@@ -319,6 +322,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         cell_type: Literal["rnn", "gru", "lstm"],
         embedding_dim: int,
         hidden_size: int,
+        cell_bias: bool = True,
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_impatience: bool = False,
@@ -331,6 +335,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             cell_type=cell_type,
             embedding_dim=embedding_dim,
             hidden_size=hidden_size,
+            cell_bias=cell_bias,
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
             enable_impatience=enable_impatience,

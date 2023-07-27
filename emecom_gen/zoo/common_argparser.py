@@ -37,6 +37,7 @@ class CommonArgumentParser(Tap):
     sender_embedding_dim: int = 10  # Sender's embedding dim.
     sender_hidden_size: int = 512  # Sender's hidden size.
     sender_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # Sender's RNN cell type.
+    sender_cell_bias: bool = True
     sender_layer_norm: bool = True  # Whether to enable sender's LayerNorm.
     sender_residual_connection: bool = False  # Whether to enable sender's residual connection.
     sender_lr: float = 1e-4  # Sender's learning rate.
@@ -50,6 +51,7 @@ class CommonArgumentParser(Tap):
     receiver_embedding_dim: int = 10  # Receiver's embedding dim.
     receiver_hidden_size: int = 128  # Receiver's hidden size.
     receiver_cell_type: Literal["rnn", "gru", "lstm"] = "lstm"  # Receiver's RNN cell type.
+    receiver_cell_bias: bool = True
     receiver_impatience: bool = False  # Wether to enable receiver's impatience.
     receiver_layer_norm: bool = False  # Wether to enable receiver's LayerNorm.
     receiver_residual_connection: bool = False  # Wether to enable receiver's residual connection.

@@ -41,6 +41,7 @@ class RnnReinforceSender(SenderBase):
         hidden_size: int,
         fix_message_length: bool,
         symbol_prediction_layer: SymbolPredictionLayer,
+        cell_bias: bool = True,
         gs_temperature: float = 1,
         gs_straight_through: bool = True,
         enable_layer_norm: bool = True,
@@ -61,6 +62,7 @@ class RnnReinforceSender(SenderBase):
         self.cell = {"rnn": RNNCell, "gru": GRUCell, "lstm": LSTMCell}[cell_type](
             embedding_dim,
             hidden_size,
+            bias=cell_bias,
         )
         self.embedding = Embedding(vocab_size, embedding_dim)
         self.bos_embedding = Parameter(torch.zeros(embedding_dim))
