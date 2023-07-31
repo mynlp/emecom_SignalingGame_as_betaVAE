@@ -343,6 +343,7 @@ def main():
         accelerator=args.accelerator,
         devices=args.devices,
         max_epochs=args.n_epochs,
+        log_every_n_steps=args.log_every_n_steps,
         check_val_every_n_epoch=args.check_val_every_n_epoch,
         enable_progress_bar=args.enable_progress_bar,
     )
