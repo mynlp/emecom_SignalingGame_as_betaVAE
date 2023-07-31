@@ -22,6 +22,7 @@ from ...model.game import (
     EnsembleBetaVAEGame,
     ConstantBetaScheduler,
     SigmoidBetaScheduler,
+    CyclicalBetaScheduler,
     AccuracyBasedBetaScheduler,
     InputDependentBaseline,
 )
@@ -227,6 +228,8 @@ def main():
             beta_scheduler = ConstantBetaScheduler(args.beta_constant_value)
         case "sigmoid":
             beta_scheduler = SigmoidBetaScheduler(args.beta_sigmoid_gain, args.beta_sigmoid_offset)
+        case "cyclical":
+            beta_scheduler = CyclicalBetaScheduler(args.beta_cyclical_period)
         case "acc-based":
             beta_scheduler = AccuracyBasedBetaScheduler(
                 args.beta_accbased_exponent, args.beta_accbased_smoothing_factor
