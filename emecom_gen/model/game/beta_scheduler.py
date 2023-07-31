@@ -63,7 +63,7 @@ class CyclicalBetaScheduler(BetaSchedulerBase):
         step: int,
         acc: Tensor,
     ) -> float:
-        return min(1, ((step % self.period) + 1) / (self.period * self.position_to_reach_peak))
+        return min(1, (step % self.period) / (self.period * self.position_to_reach_peak))
 
 
 class AccuracyBasedBetaScheduler(BetaSchedulerBase):
