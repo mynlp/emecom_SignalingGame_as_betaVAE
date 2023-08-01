@@ -86,7 +86,7 @@ class CommonArgumentParser(Tap):
     beta_accbased_exponent: float = 1
     beta_accbased_smoothing_factor: float = 0.1
     beta_rewo_initial_value: float = 0.01
-    beta_rewo_communication_loss_constraint = 0.5
+    beta_rewo_communication_loss_constraint: float = 0.5
 
     optimizer_class: Literal["adam", "sgd"] = "adam"
     num_warmup_steps: int = 0
