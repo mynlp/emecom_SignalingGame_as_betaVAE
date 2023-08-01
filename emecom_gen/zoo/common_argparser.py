@@ -78,13 +78,15 @@ class CommonArgumentParser(Tap):
     baseline_type: Literal["batch-mean", "input-dependent", "baseline-from-sender", "none"] = "batch-mean"
     reward_normalization_type: Literal["none", "std", "baseline-std"] = "none"
 
-    beta_scheduler_type: Literal["constant", "sigmoid", "cyclical", "acc-based"] = "constant"
+    beta_scheduler_type: Literal["constant", "sigmoid", "cyclical", "acc-based", "rewo"] = "constant"
     beta_constant_value: float = 1
     beta_sigmoid_gain: float = 0.01
     beta_sigmoid_offset: float = 1000
     beta_cyclical_period: int = 2000
     beta_accbased_exponent: float = 1
     beta_accbased_smoothing_factor: float = 0.1
+    beta_rewo_initial_value: float = 0.01
+    beta_rewo_communication_loss_constraint = 0.5
 
     optimizer_class: Literal["adam", "sgd"] = "adam"
     num_warmup_steps: int = 0

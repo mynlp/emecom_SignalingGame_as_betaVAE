@@ -22,6 +22,7 @@ from ...model.game import (
     SigmoidBetaScheduler,
     CyclicalBetaScheduler,
     AccuracyBasedBetaScheduler,
+    REWOBetaScheduler,
     InputDependentBaseline,
 )
 from ...model.symbol_prediction_layer import SymbolPredictionLayer
@@ -48,8 +49,14 @@ class ArgumentParser(CommonArgumentParser):
                     beta_scheduler_info += f"V{self.beta_constant_value}"
                 case "sigmoid":
                     beta_scheduler_info += f"G{self.beta_sigmoid_gain}O{self.beta_sigmoid_offset}"
+                case "cyclical":
+                    beta_scheduler_info += f"P{self.beta_cyclical_period}"
                 case "acc-based":
                     beta_scheduler_info += f"E{self.beta_accbased_exponent}S{self.beta_accbased_smoothing_factor}"
+                case "rewo":
+                    beta_scheduler_info += (
+                        f"I{self.beta_rewo_initial_value}C{self.beta_rewo_communication_loss_constraint}"
+                    )
 
             training_method_info = f"GS{self.gumbel_softmax_mode}"
             if self.gumbel_softmax_mode:
@@ -244,6 +251,11 @@ def main():
             beta_scheduler = AccuracyBasedBetaScheduler(
                 args.beta_accbased_exponent,
                 args.beta_accbased_smoothing_factor,
+            )
+        case "rewo":
+            beta_scheduler = REWOBetaScheduler(
+                communication_loss_constraint=args.beta_rewo_communication_loss_constraint,
+                initial_value=args.beta_rewo_initial_value,
             )
 
     match args.baseline_type:

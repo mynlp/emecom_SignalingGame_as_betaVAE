@@ -94,9 +94,6 @@ class EnsembleBetaVAEGame(GameBase):
 
         acc = self.compute_accuracy_tensor(batch, output_r)
 
-        mask = output_s.message_mask
-        beta = self.beta_scheduler.forward(self.batch_step, acc=acc) / self.n_agent_pairs
-
         communication_loss = F.cross_entropy(
             input=output_r.last_logits.permute(0, -1, *tuple(range(1, output_r.last_logits.dim() - 1))),
             target=batch.target_label,
@@ -104,6 +101,12 @@ class EnsembleBetaVAEGame(GameBase):
         )
         while communication_loss.dim() > 1:
             communication_loss = communication_loss.sum(dim=-1)
+
+        mask = output_s.message_mask
+        beta = (
+            self.beta_scheduler.forward(self.batch_step, acc=acc, communication_loss=communication_loss)
+            / self.n_agent_pairs
+        )
 
         loss_s = torch.where(
             mask > 0,
@@ -181,6 +184,7 @@ class EnsembleBetaVAEGame(GameBase):
             loss=surrogate_loss,
             communication_loss=communication_loss,
             acc=acc,
+            beta=beta,
             sender_output=output_s,
             receiver_output=output_r,
             message_prior_output=output_p,
@@ -249,7 +253,7 @@ class EnsembleBetaVAEGame(GameBase):
 
             not_ended = not_ended * (1.0 - degree_of_eos)
 
-        beta = self.beta_scheduler.forward(step=self.batch_step, acc=acc)
+        beta = self.beta_scheduler.forward(step=self.batch_step, acc=acc, communication_loss=communication_loss)
         surrogate_loss = communication_loss + beta * kl_term_loss / self.n_agent_pairs
 
         return GameOutputGumbelSoftmax(

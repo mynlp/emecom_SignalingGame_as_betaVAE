@@ -8,4 +8,5 @@ from .beta_scheduler import (
     SigmoidBetaScheduler,
     CyclicalBetaScheduler,
     AccuracyBasedBetaScheduler,
+    REWOBetaScheduler,
 )

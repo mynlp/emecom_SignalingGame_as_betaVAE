@@ -12,6 +12,7 @@ class GameOutput:
     loss: Tensor
     communication_loss: Tensor
     acc: Tensor
+    beta: Tensor
     sender_output: Optional[SenderOutput] = None
     receiver_output: Optional[ReceiverOutput] = None
     message_prior_output: Optional[MessagePriorOutput] = None
@@ -56,6 +57,7 @@ class GameOutput:
             "surrogate_loss": self.loss,
             "communication_loss": self.communication_loss,
             "acc": self.acc,
+            "beta": self.beta,
         }
 
         if self.sender_output is not None:
