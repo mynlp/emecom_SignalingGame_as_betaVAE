@@ -4,6 +4,8 @@ from pathlib import Path
 from logzero import logger
 from datetime import datetime
 
+import torch
+
 
 def to_eos_type(string: str) -> Literal["trainable-softmax", "trainable-sigmoid"] | float | None:
     match string:
@@ -85,8 +87,8 @@ class CommonArgumentParser(Tap):
     beta_cyclical_period: int = 2000
     beta_accbased_exponent: float = 1
     beta_accbased_smoothing_factor: float = 0.1
-    beta_rewo_initial_value: float = 0.01
-    beta_rewo_communication_loss_constraint: float = 0.5
+    beta_rewo_initial_value: float = torch.finfo(torch.float).eps
+    beta_rewo_communication_loss_constraint: float = 0.3
 
     optimizer_class: Literal["adam", "sgd"] = "adam"
     num_warmup_steps: int = 0
