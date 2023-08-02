@@ -107,7 +107,7 @@ class REWOBetaScheduler(BetaSchedulerBase):
     def __init__(
         self,
         communication_loss_constraint: float = 0.3,
-        communication_loss_smoothing_factor: float = 0.01,
+        communication_loss_smoothing_factor: float = 0.1,
         initial_value: float = torch.finfo(torch.float).tiny,
         nu: float = 1,
         tau: float = 1,
