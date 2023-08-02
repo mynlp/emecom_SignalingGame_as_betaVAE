@@ -106,9 +106,9 @@ class AccuracyBasedBetaScheduler(BetaSchedulerBase):
 class REWOBetaScheduler(BetaSchedulerBase):
     def __init__(
         self,
-        communication_loss_constraint: float = 0.5,
-        communication_loss_smoothing_factor: float = 0.1,
-        initial_value: float = 0.01,
+        communication_loss_constraint: float = 0.3,
+        communication_loss_smoothing_factor: float = 0.01,
+        initial_value: float = torch.finfo(torch.float).tiny,
         nu: float = 1,
         tau: float = 1,
     ) -> None:
@@ -147,10 +147,13 @@ class REWOBetaScheduler(BetaSchedulerBase):
             if not self.initial_phase:
                 delta = self.communication_loss_ema - self.communication_loss_constraint
                 half = torch.as_tensor(0.5, device=device)
-                self.value *= (
-                    self.nu
-                    * (delta.neg().heaviside(half) * (self.tau * (self.value - 1)).tanh() - delta.heaviside(half))
-                    * delta
-                ).exp()
+                self.value = (
+                    self.value
+                    * (
+                        self.nu
+                        * (delta.neg().heaviside(half) * (self.tau * (self.value - 1)).tanh() - delta.heaviside(half))
+                        * delta
+                    ).exp()
+                ).clamp(min=torch.finfo(torch.float).tiny, max=1.0)
 
         return self.value
