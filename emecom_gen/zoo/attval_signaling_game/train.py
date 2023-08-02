@@ -54,9 +54,7 @@ class ArgumentParser(CommonArgumentParser):
                 case "acc-based":
                     beta_scheduler_info += f"E{self.beta_accbased_exponent}S{self.beta_accbased_smoothing_factor}"
                 case "rewo":
-                    beta_scheduler_info += (
-                        f"I{self.beta_rewo_initial_value}C{self.beta_rewo_communication_loss_constraint}"
-                    )
+                    beta_scheduler_info += f"C{self.beta_rewo_communication_loss_constraint}"
 
             training_method_info = f"GS{self.gumbel_softmax_mode}"
             if self.gumbel_softmax_mode:
