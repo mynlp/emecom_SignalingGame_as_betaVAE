@@ -139,7 +139,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         match self.reward_normalization_type:
             case "none":
-                denominator = 1
+                denominator = torch.ones_like(mask)
             case "std":
                 sum_mask = mask.sum(dim=0, keepdim=True).clamp(min=1.0)
                 denominator = (
@@ -162,15 +162,12 @@ class EnsembleBetaVAEGame(GameBase):
                     .detach()
                 )
 
+        loss_s_normalized = ((loss_s - baseline.detach()) / denominator).nan_to_num()
         loss_r = communication_loss
         loss_p = torch.where(mask > 0, output_p.message_log_probs, 0).sum(dim=-1).neg() * beta
 
         surrogate_loss = (
-            loss_r
-            + loss_p
-            + torch.where(mask > 0, (loss_s - baseline.detach()) * output_s.message_log_probs / denominator, 0).sum(
-                dim=-1
-            )
+            loss_r + loss_p + torch.where(mask > 0, loss_s_normalized * output_s.message_log_probs, 0).sum(dim=-1)
         )
 
         baseline_loss = torch.where(mask > 0, (loss_s - baseline).square(), 0).sum(dim=-1)
