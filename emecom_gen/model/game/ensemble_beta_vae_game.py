@@ -173,9 +173,7 @@ class EnsembleBetaVAEGame(GameBase):
             )
         )
 
-        baseline_loss = torch.where(
-            mask > 0, (loss_s - baseline).clamp(min=torch.finfo(torch.float).eps).square(), 0
-        ).sum(dim=-1)
+        baseline_loss = torch.where(mask > 0, (loss_s - baseline).square(), 0).sum(dim=-1)
 
         if baseline_loss.requires_grad:
             surrogate_loss = surrogate_loss + baseline_loss
