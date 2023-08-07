@@ -139,7 +139,7 @@ class RnnReinforceSender(SenderBase):
         e = self.e_layer_norm.forward(self.bos_embedding).unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
         h_dropout = self.dropout_function_maker.forward(h)
-        e_dropout = self.dropout_function_maker.forward(h)
+        e_dropout = self.dropout_function_maker.forward(e)
 
         h = h_dropout(h)
         e = e_dropout(e)
