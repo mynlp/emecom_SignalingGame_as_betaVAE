@@ -13,10 +13,11 @@ class GameOutput:
     communication_loss: Tensor
     acc: Tensor
     beta: Tensor
-    sender_output: Optional[SenderOutput] = None
-    receiver_output: Optional[ReceiverOutput] = None
-    message_prior_output: Optional[MessagePriorOutput] = None
-    baseline_loss: Optional[Tensor] = None
+    sender_output: SenderOutput | None = None
+    receiver_output: ReceiverOutput | None = None
+    message_prior_output: MessagePriorOutput | None = None
+    baseline_loss: Tensor | None = None
+    variational_dropout_kld: Tensor | None = None
 
     def __post_init__(self):
         nans: list[str] = []
@@ -82,6 +83,9 @@ class GameOutput:
                 )
         if self.baseline_loss is not None:
             log_dict.update({"baseline_loss": self.baseline_loss})
+
+        if self.variational_dropout_kld is not None:
+            log_dict.update({"variational_dropout_alpha": self.variational_dropout_kld})
 
         return {prefix + k + suffix: v.detach().float().mean() for k, v in log_dict.items()}
 
