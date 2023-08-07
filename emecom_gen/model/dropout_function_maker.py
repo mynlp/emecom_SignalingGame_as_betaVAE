@@ -44,24 +44,24 @@ class DropoutFunctionMaker(Module):
         ones_like_x = torch.ones_like(input)
         match self.mode:
             case "bernoulli":
-                dropout_p = 1 / (alpha.item() + 1)
+                dropout_p = (alpha / (alpha + 1)).item()
 
                 def bernoulli_dropout(
-                    input: Tensor,
+                    x: Tensor,
                     mask: Tensor = F.dropout(ones_like_x, dropout_p, training=self.training),
                 ) -> Tensor:
-                    return input * mask
+                    return x * mask
 
                 dropout_fn = bernoulli_dropout
 
             case "gaussian" | "variational":
 
                 def gaussian_dropout(
-                    input: Tensor,
+                    x: Tensor,
                     scaled_eps: Tensor = alpha.sqrt()
                     * (torch.randn_like if self.training else torch.zeros_like)(input),
                 ) -> Tensor:
-                    return input + (input.detach() * scaled_eps)
+                    return x + (x.detach() * scaled_eps)
 
                 dropout_fn = gaussian_dropout
 
