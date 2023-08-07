@@ -195,6 +195,7 @@ class RnnReceiverBase(ReceiverBase):
             last_logits=last_logits,
             message_prior_output=message_prior_output,
             variational_dropout_kld=self.dropout_function_maker.compute_kl_div(),
+            variational_dropout_alpha=self.dropout_function_maker.log_alpha.exp(),
         )
 
     def forward_gumbel_softmax(

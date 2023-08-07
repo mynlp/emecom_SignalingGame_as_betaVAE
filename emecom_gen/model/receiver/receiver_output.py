@@ -10,6 +10,7 @@ class ReceiverOutput:
     last_logits: Tensor
     message_prior_output: MessagePriorOutput | None = None
     variational_dropout_kld: Tensor | None = None
+    variational_dropout_alpha: Tensor | None = None
 
 
 @dataclasses.dataclass(frozen=True)

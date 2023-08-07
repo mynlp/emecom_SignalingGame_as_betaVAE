@@ -187,7 +187,7 @@ class EnsembleBetaVAEGame(GameBase):
             receiver_output=output_r,
             message_prior_output=output_p,
             baseline_loss=baseline_loss,
-            variational_dropout_kld=output_r.variational_dropout_kld,
+            variational_dropout_alpha=output_r.variational_dropout_alpha,
         )
 
     def forward_gumbel_softmax(
