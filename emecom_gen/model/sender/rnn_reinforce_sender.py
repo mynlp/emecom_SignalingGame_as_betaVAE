@@ -8,6 +8,7 @@ import torch
 
 from ...data import Batch
 from ..symbol_prediction_layer import SymbolPredictionLayer
+from ..dropout_function_maker import DropoutFunctionMaker
 from ..value_estimation_layer import ValueEstimationLayer
 from .sender_output import SenderOutput, SenderOutputGumbelSoftmax
 from .sender_base import SenderBase
@@ -46,8 +47,7 @@ class RnnReinforceSender(SenderBase):
         gs_straight_through: bool = True,
         enable_layer_norm: bool = True,
         enable_residual_connection: bool = True,
-        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
-        dropout_p: float = 0,
+        dropout_function_maker: DropoutFunctionMaker | None = None,
     ) -> None:
         super().__init__(
             vocab_size=vocab_size,
@@ -77,8 +77,11 @@ class RnnReinforceSender(SenderBase):
             self.e_layer_norm = Identity()
 
         self.enable_residual_connection = enable_residual_connection
-        self.dropout_p = dropout_p
-        self.dropout_type: Literal["bernoulli", "gaussian"] = dropout_type
+
+        if dropout_function_maker is None:
+            self.dropout_function_maker = DropoutFunctionMaker()
+        else:
+            self.dropout_function_maker = dropout_function_maker
 
         self.reset_parameters()
 
@@ -94,37 +97,6 @@ class RnnReinforceSender(SenderBase):
             batch,
             forced_message=forced_message,
         )
-
-    def _make_dropout_function(
-        self,
-        x: Tensor,
-    ) -> Callable[[Tensor], Tensor]:
-        ones_like_x = torch.ones_like(x)
-        match self.dropout_type:
-            case "bernoulli":
-
-                def bernoulli_dropout(
-                    input: Tensor,
-                    mask: Tensor = F.dropout(
-                        ones_like_x,
-                        self.dropout_p,
-                        training=self.training,
-                    ),
-                ) -> Tensor:
-                    return input * mask
-
-                return bernoulli_dropout
-
-            case "gaussian":
-
-                def gaussian_dropout(
-                    input: Tensor,
-                    scaled_eps: Tensor = ((self.dropout_p / (1 - self.dropout_p)) ** 0.5)
-                    * (torch.randn_like(x) if self.training else torch.zeros_like(x)),
-                ) -> Tensor:
-                    return input + (input.detach() * scaled_eps)
-
-                return gaussian_dropout
 
     def _step_hidden_state(
         self,
@@ -166,8 +138,8 @@ class RnnReinforceSender(SenderBase):
         c = torch.zeros_like(h)
         e = self.e_layer_norm.forward(self.bos_embedding).unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
-        h_dropout = self._make_dropout_function(h)
-        e_dropout = self._make_dropout_function(e)
+        h_dropout = self.dropout_function_maker.forward(h)
+        e_dropout = self.dropout_function_maker.forward(h)
 
         h = h_dropout(h)
         e = e_dropout(e)
