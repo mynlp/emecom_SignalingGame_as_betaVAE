@@ -175,6 +175,9 @@ class EnsembleBetaVAEGame(GameBase):
         if baseline_loss.requires_grad:
             surrogate_loss = surrogate_loss + baseline_loss
 
+        if output_r.variational_dropout_kld is not None:
+            surrogate_loss = surrogate_loss + beta * output_r.variational_dropout_kld
+
         return GameOutput(
             loss=surrogate_loss,
             communication_loss=communication_loss,

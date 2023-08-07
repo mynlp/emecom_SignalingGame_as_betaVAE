@@ -28,6 +28,7 @@ from ...model.game import (
     InputDependentBaseline,
 )
 from ...model.symbol_prediction_layer import SymbolPredictionLayer
+from ...model.dropout_function_maker import DropoutFunctionMaker
 from ..common_argparser import CommonArgumentParser
 
 
@@ -71,8 +72,8 @@ class ArgumentParser(CommonArgumentParser):
                 f"LN{self.sender_layer_norm}"
                 f"RC{self.sender_residual_connection}"
                 f"WD{self.sender_weight_decay}"
-                f"DO{self.sender_dropout_type}"
-                f"P{self.sender_dropout_p}"
+                f"DO{self.sender_dropout_mode}"
+                f"A{self.sender_dropout_alpha}"
             )
 
             receiver_architecture_info = (
@@ -82,8 +83,8 @@ class ArgumentParser(CommonArgumentParser):
                 f"LN{self.receiver_layer_norm}"
                 f"RC{self.receiver_residual_connection}"
                 f"WD{self.receiver_weight_decay}"
-                f"DO{self.receiver_dropout_type}"
-                f"P{self.receiver_dropout_p}"
+                f"DO{self.receiver_dropout_mode}"
+                f"A{self.receiver_dropout_alpha}"
                 f"IP{self.receiver_impatience}"
             )
 
@@ -158,8 +159,10 @@ def main():
             ),
             enable_layer_norm=args.sender_layer_norm,
             enable_residual_connection=args.sender_residual_connection,
-            dropout_p=args.sender_dropout_p,
-            dropout_type=args.sender_dropout_type,
+            dropout_function_maker=DropoutFunctionMaker(
+                mode=args.sender_dropout_mode,
+                alpha=args.sender_dropout_alpha,
+            ),
         )
         for _ in range(args.n_agent_pairs)
     ]
@@ -178,8 +181,10 @@ def main():
             enable_layer_norm=args.receiver_layer_norm,
             enable_residual_connection=args.receiver_residual_connection,
             enable_impatience=args.receiver_impatience,
-            dropout_p=args.receiver_dropout_p,
-            dropout_type=args.receiver_dropout_type,
+            dropout_function_maker=DropoutFunctionMaker(
+                mode=args.receiver_dropout_mode,
+                alpha=args.receiver_dropout_alpha,
+            ),
             symbol_prediction_layer=SymbolPredictionLayer(
                 hidden_size=args.receiver_hidden_size,
                 vocab_size=args.vocab_size,

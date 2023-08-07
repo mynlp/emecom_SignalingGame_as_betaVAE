@@ -44,8 +44,8 @@ class CommonArgumentParser(Tap):
     sender_residual_connection: bool = False  # Whether to enable sender's residual connection.
     sender_lr: float = 1e-4  # Sender's learning rate.
     sender_weight_decay: float = 0  # Sender's weight decay.
-    sender_dropout_p: float = 0  # Sender's dropout rate.
-    sender_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Sender's dropout type.
+    sender_dropout_alpha: float = 0  # Sender's dropout alpha parameter.
+    sender_dropout_mode: Literal["bernoulli", "gaussian"] = "bernoulli"  # Sender's dropout type.
     sender_symbol_prediction_layer_bias: bool = True
     sender_symbol_prediction_layer_eos_type: Literal["trainable-softmax", "trainable-sigmoid"] | float | None = None
     sender_symbol_prediction_layer_stick_breaking: bool = False
@@ -59,8 +59,8 @@ class CommonArgumentParser(Tap):
     receiver_residual_connection: bool = False  # Wether to enable receiver's residual connection.
     receiver_lr: float = 1e-4  # Receiver's learning rate.
     receiver_weight_decay: float = 0  # Receiver's weight decay.
-    receiver_dropout_p: float = 0  # Receiver's dropout rate.
-    receiver_dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli"  # Receiver's dropout type.
+    receiver_dropout_alpha: float = 0  # Receiver's dropout alpha parameter.
+    receiver_dropout_mode: Literal["bernoulli", "gaussian"] = "bernoulli"  # Receiver's dropout type.
     receiver_symbol_prediction_layer_bias: bool = True
     receiver_symbol_prediction_layer_eos_type: Literal["trainable-softmax", "trainable-sigmoid"] | float | None = None
     receiver_symbol_prediction_layer_stick_breaking: bool = False

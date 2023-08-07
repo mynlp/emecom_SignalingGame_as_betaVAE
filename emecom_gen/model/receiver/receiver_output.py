@@ -8,7 +8,8 @@ from ..message_prior import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 @dataclasses.dataclass(frozen=True)
 class ReceiverOutput:
     last_logits: Tensor
-    message_prior_output: Optional[MessagePriorOutput] = None
+    message_prior_output: MessagePriorOutput | None = None
+    variational_dropout_kld: Tensor | None = None
 
 
 @dataclasses.dataclass(frozen=True)

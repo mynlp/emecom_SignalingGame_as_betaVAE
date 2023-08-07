@@ -6,6 +6,7 @@ from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 
 from ..symbol_prediction_layer import SymbolPredictionLayer
+from ..dropout_function_maker import DropoutFunctionMaker
 from ..message_prior import MessagePriorOutput, MessagePriorOutputGumbelSoftmax
 from .receiver_base import ReceiverBase
 from .receiver_output import ReceiverOutput, ReceiverOutputGumbelSoftmax
@@ -22,8 +23,7 @@ class RnnReceiverBase(ReceiverBase):
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_impatience: bool = False,
-        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
-        dropout_p: float = 0,
+        dropout_function_maker: DropoutFunctionMaker | None = None,
         symbol_prediction_layer: SymbolPredictionLayer | None = None,
     ) -> None:
         super().__init__()
@@ -41,11 +41,13 @@ class RnnReceiverBase(ReceiverBase):
 
         self.enable_residual_connection = enable_residual_connection
         self.enable_impatience = enable_impatience
-        self.dropout_p = dropout_p
-        self.dropout_type: Literal["bernoulli", "gaussian"] = dropout_type
+
+        if dropout_function_maker is None:
+            self.dropout_function_maker = DropoutFunctionMaker()
+        else:
+            self.dropout_function_maker = dropout_function_maker
 
         self.symbol_embedding = Embedding(vocab_size, embedding_dim)
-
         self.symbol_prediction_layer = symbol_prediction_layer
 
         if symbol_prediction_layer is None:
@@ -74,37 +76,6 @@ class RnnReceiverBase(ReceiverBase):
     ) -> Tensor:
         raise NotImplementedError()
 
-    def _make_dropout_function(
-        self,
-        x: Tensor,
-    ) -> Callable[[Tensor], Tensor]:
-        ones_like_x = torch.ones_like(x)
-        match self.dropout_type:
-            case "bernoulli":
-
-                def bernoulli_dropout(
-                    input: Tensor,
-                    mask: Tensor = F.dropout(
-                        ones_like_x,
-                        self.dropout_p,
-                        training=self.training,
-                    ),
-                ) -> Tensor:
-                    return input * mask
-
-                return bernoulli_dropout
-
-            case "gaussian":
-
-                def gaussian_dropout(
-                    input: Tensor,
-                    scaled_eps: Tensor = ((self.dropout_p / (1 - self.dropout_p)) ** 0.5)
-                    * (torch.randn_like(x) if self.training else torch.zeros_like(x)),
-                ) -> Tensor:
-                    return input + (input.detach() * scaled_eps)
-
-                return gaussian_dropout
-
     def _embed_message(
         self,
         message: Tensor,
@@ -112,7 +83,7 @@ class RnnReceiverBase(ReceiverBase):
         batch_size = message.shape[0]
 
         embedded_message = self.symbol_embedding.forward(message)
-        embedded_message = self._make_dropout_function(embedded_message[:, :1])(embedded_message)
+        embedded_message = self.dropout_function_maker.forward(embedded_message[:, :1])(embedded_message)
 
         if self.bos_embedding is not None:
             embedded_message = torch.cat(
@@ -150,7 +121,7 @@ class RnnReceiverBase(ReceiverBase):
         h = torch.zeros(size=(message.shape[0], self.hidden_size), device=message.device)
         c = torch.zeros_like(h)
 
-        h_dropout = self._make_dropout_function(h)
+        h_dropout = self.dropout_function_maker.forward(h)
 
         hidden_state_list: list[Tensor] = []
         for step in range(embedded_message.shape[1]):
@@ -223,6 +194,7 @@ class RnnReceiverBase(ReceiverBase):
         return ReceiverOutput(
             last_logits=last_logits,
             message_prior_output=message_prior_output,
+            variational_dropout_kld=self.dropout_function_maker.compute_kl_div(),
         )
 
     def forward_gumbel_softmax(
@@ -286,8 +258,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_impatience: bool = False,
-        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
-        dropout_p: float = 0,
+        dropout_function_maker: DropoutFunctionMaker | None = None,
         symbol_prediction_layer: SymbolPredictionLayer | None = None,
     ) -> None:
         super().__init__(
@@ -299,8 +270,7 @@ class RnnReconstructiveReceiver(RnnReceiverBase):
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
             enable_impatience=enable_impatience,
-            dropout_p=dropout_p,
-            dropout_type=dropout_type,
+            dropout_function_maker=dropout_function_maker,
             symbol_prediction_layer=symbol_prediction_layer,
         )
 
@@ -326,8 +296,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
         enable_layer_norm: bool = False,
         enable_residual_connection: bool = False,
         enable_impatience: bool = False,
-        dropout_type: Literal["bernoulli", "gaussian"] = "bernoulli",
-        dropout_p: float = 0,
+        dropout_function_maker: DropoutFunctionMaker | None = None,
         symbol_prediction_layer: SymbolPredictionLayer | None = None,
     ) -> None:
         super().__init__(
@@ -339,8 +308,7 @@ class RnnDiscriminativeReceiver(RnnReceiverBase):
             enable_layer_norm=enable_layer_norm,
             enable_residual_connection=enable_residual_connection,
             enable_impatience=enable_impatience,
-            dropout_p=dropout_p,
-            dropout_type=dropout_type,
+            dropout_function_maker=dropout_function_maker,
             symbol_prediction_layer=symbol_prediction_layer,
         )
 
