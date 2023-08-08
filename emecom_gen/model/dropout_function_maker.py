@@ -23,7 +23,7 @@ class DropoutFunctionMaker(Module):
             case "bernoulli" | "gaussian":
                 self.log_alpha = torch.as_tensor(alpha).log()
             case "variational":
-                self.log_alpha = Parameter(torch.as_tensor(alpha + torch.finfo(torch.float).eps).log())
+                self.log_alpha = Parameter(torch.as_tensor(alpha).clamp(min=torch.finfo(torch.float).eps)).log()
 
     def compute_kl_div(self) -> Tensor | None:
         match self.mode:
