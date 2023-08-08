@@ -40,7 +40,7 @@ class GameBase(LightningModule):
         receiver_update_prob: float = 1,
         prior_update_prob: float = 1,
         num_warmup_steps: int = 0,
-        gradient_clip_val: float = 10,
+        gradient_clip_val: float | None = None,
         gumbel_softmax_mode: bool = False,
         accumulate_grad_batches: int = 1,
     ) -> None:
@@ -172,10 +172,11 @@ class GameBase(LightningModule):
         self.manual_backward(game_output.loss.mean() / self.accumulate_grad_batches)
 
         if accumulation_end_step:
-            self.clip_gradients(optimizer_s, self.gradient_clip_val, "norm")
-            self.clip_gradients(optimizer_r, self.gradient_clip_val, "norm")
-            self.clip_gradients(optimizer_p, self.gradient_clip_val, "norm")
-            self.clip_gradients(optimizer_b, self.gradient_clip_val, "norm")
+            if self.gradient_clip_val is not None:
+                self.clip_gradients(optimizer_s, self.gradient_clip_val, "norm")
+                self.clip_gradients(optimizer_r, self.gradient_clip_val, "norm")
+                self.clip_gradients(optimizer_p, self.gradient_clip_val, "norm")
+                self.clip_gradients(optimizer_b, self.gradient_clip_val, "norm")
 
             update_s = (
                 torch.bernoulli(
