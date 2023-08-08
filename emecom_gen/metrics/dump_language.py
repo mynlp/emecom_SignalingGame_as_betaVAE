@@ -15,7 +15,7 @@ class DumpLanguage(Callback):
         self,
         save_dir: Path,
         meaning_type: Literal["input", "target_label", "path"],
-        beam_sizes: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64, 128),
+        beam_sizes: tuple[int, ...] = (1, 2, 4, 8),
     ):
         super().__init__()
         self.save_dir = save_dir
