@@ -124,10 +124,18 @@ class EnsembleBetaVAEGame(GameBase):
                 baseline = (loss_s.sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True).clamp(min=1.0)).expand_as(
                     mask
                 )
+                baseline_loss = torch.zeros_like(mask[:, 0])
             case "baseline-from-sender":
-                baseline = torch.where(mask > 0, output_s.estimated_value, 0)
+                baseline_1 = torch.where(mask > 0, output_s.estimated_value, 0)
+                baseline_2 = (
+                    (loss_s - baseline_1.detach()).sum(dim=0, keepdim=True)
+                    / mask.sum(dim=0, keepdim=True).clamp(min=1.0)
+                ).expand_as(mask)
+                baseline = baseline_1 + baseline_2
+                baseline_loss = torch.where(mask > 0, (loss_s - baseline_1).square(), 0).sum(dim=-1)
             case "none":
                 baseline = torch.zeros_like(mask)
+                baseline_loss = torch.zeros_like(mask[:, 0])
             case b:
                 assert isinstance(b, InputDependentBaseline)
                 baseline = b.forward(
@@ -136,6 +144,7 @@ class EnsembleBetaVAEGame(GameBase):
                     sender_index=sender_index,
                     receiver_index=receiver_index,
                 )
+                baseline_loss = torch.where(mask > 0, (loss_s - baseline).square(), 0).sum(dim=-1)
 
         match self.reward_normalization_type:
             case "none":
@@ -167,13 +176,11 @@ class EnsembleBetaVAEGame(GameBase):
         loss_p = torch.where(mask > 0, output_p.message_log_probs, 0).sum(dim=-1).neg() * beta
 
         surrogate_loss = (
-            loss_r + loss_p + torch.where(mask > 0, loss_s_normalized * output_s.message_log_probs, 0).sum(dim=-1)
+            loss_r
+            + loss_p
+            + torch.where(mask > 0, loss_s_normalized * output_s.message_log_probs, 0).sum(dim=-1)
+            + baseline_loss
         )
-
-        baseline_loss = torch.where(mask > 0, (loss_s - baseline).square(), 0).sum(dim=-1)
-
-        if baseline_loss.requires_grad:
-            surrogate_loss = surrogate_loss + baseline_loss
 
         if output_r.variational_dropout_kld is not None:
             surrogate_loss = surrogate_loss + beta * output_r.variational_dropout_kld
