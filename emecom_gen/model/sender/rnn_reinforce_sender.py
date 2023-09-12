@@ -1,6 +1,5 @@
 from torch import Tensor
 from torch.nn import RNNCell, GRUCell, LSTMCell, Embedding, LayerNorm, Identity, Parameter
-from torch.nn import functional as F
 from torch.distributions import RelaxedOneHotCategorical
 from torch.distributions import Categorical
 from typing import Callable, Literal, Optional
@@ -132,17 +131,17 @@ class RnnReinforceSender(SenderBase):
         input = batch.input
         batch_size = input.shape[0]
 
-        encoder_hidden_state = self.h_layer_norm.forward(self.object_encoder(input))
+        encoder_hidden_state = self.object_encoder(input)
 
         h = encoder_hidden_state
         c = torch.zeros_like(h)
-        e = self.e_layer_norm.forward(self.bos_embedding).unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
+        e = self.bos_embedding.unsqueeze(0).expand(batch_size, *self.bos_embedding.shape)
 
         h_dropout = self.dropout_function_maker.forward(h)
         e_dropout = self.dropout_function_maker.forward(e)
 
-        h = h_dropout(h)
-        e = e_dropout(e)
+        h = h_dropout(self.h_layer_norm.forward(h))
+        e = e_dropout(self.e_layer_norm.forward(e))
 
         symbol_list: list[Tensor] = []
         log_prob_list: list[Tensor] = []
