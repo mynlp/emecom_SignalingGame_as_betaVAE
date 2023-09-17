@@ -1,4 +1,4 @@
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from logzero import logger
@@ -117,6 +117,9 @@ class ArgumentParser(CommonArgumentParser):
 
 def main():
     args = ArgumentParser().parse_args()
+
+    seed_everything(args.random_seed)
+    torch.use_deterministic_algorithms(True)
 
     args_save_path = args.save_dir / args.experiment_name / args.experiment_version / "args.json"
     args_save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -300,6 +303,7 @@ def main():
         prior_update_prob=args.prior_update_prob,
         gumbel_softmax_mode=args.gumbel_softmax_mode,
         accumulate_grad_batches=args.accumulate_grad_batches,
+        gradient_clip_val=10,
     )
 
     logger.info("Create a trainer")
