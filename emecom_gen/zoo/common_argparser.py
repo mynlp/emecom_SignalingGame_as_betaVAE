@@ -49,6 +49,7 @@ class CommonArgumentParser(Tap):
     sender_symbol_prediction_layer_bias: bool = True
     sender_symbol_prediction_layer_eos_type: Literal["trainable-softmax", "trainable-sigmoid"] | float | None = None
     sender_symbol_prediction_layer_stick_breaking: bool = False
+    sender_entropy_regularizer_coeff: float = 0
 
     receiver_embedding_dim: int = 10  # Receiver's embedding dim.
     receiver_hidden_size: int = 128  # Receiver's hidden size.

@@ -303,6 +303,7 @@ def main():
         prior_update_prob=args.prior_update_prob,
         gumbel_softmax_mode=args.gumbel_softmax_mode,
         accumulate_grad_batches=args.accumulate_grad_batches,
+        sender_entropy_regularizer_coeff=args.sender_entropy_regularizer_coeff,
     )
 
     logger.info("Create a trainer")

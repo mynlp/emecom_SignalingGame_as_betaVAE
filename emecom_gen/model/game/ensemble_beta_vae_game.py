@@ -38,6 +38,7 @@ class EnsembleBetaVAEGame(GameBase):
         prior_update_prob: float = 1,
         gumbel_softmax_mode: bool = False,
         accumulate_grad_batches: int = 1,
+        sender_entropy_regularizer_coeff: float | None = None,  # For ablation study
     ) -> None:
         super().__init__(
             senders=list(senders),
@@ -59,6 +60,7 @@ class EnsembleBetaVAEGame(GameBase):
 
         self.beta_scheduler = beta_scheduler
         self.reward_normalization_type: Literal["none", "std", "baseline-std"] = reward_normalization_type
+        self.sender_entropy_regularizer_coeff = sender_entropy_regularizer_coeff
 
     def forward(
         self,
@@ -184,6 +186,13 @@ class EnsembleBetaVAEGame(GameBase):
 
         if output_r.variational_dropout_kld is not None:
             surrogate_loss = surrogate_loss + beta * output_r.variational_dropout_kld
+
+        if self.sender_entropy_regularizer_coeff is not None:
+            surrogate_loss = surrogate_loss + (
+                self.sender_entropy_regularizer_coeff
+                * (output_s.entropies * mask).sum(dim=-1)
+                / mask.sum(dim=-1).clamp(min=1)
+            )
 
         return GameOutput(
             loss=surrogate_loss,
