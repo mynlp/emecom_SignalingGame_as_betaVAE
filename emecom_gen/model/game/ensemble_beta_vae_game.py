@@ -188,7 +188,7 @@ class EnsembleBetaVAEGame(GameBase):
             surrogate_loss = surrogate_loss + beta * output_r.variational_dropout_kld
 
         if self.sender_entropy_regularizer_coeff is not None:
-            surrogate_loss = surrogate_loss + (
+            surrogate_loss = surrogate_loss - (
                 self.sender_entropy_regularizer_coeff
                 * (output_s.entropies * mask).sum(dim=-1)
                 / mask.sum(dim=-1).clamp(min=1)
