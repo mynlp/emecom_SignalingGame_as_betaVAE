@@ -1,4 +1,4 @@
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from torch.nn import Linear
@@ -118,6 +118,9 @@ class ArgumentParser(CommonArgumentParser):
 
 def main():
     args = ArgumentParser().parse_args()
+
+    seed_everything(args.random_seed)
+    torch.use_deterministic_algorithms(True)
 
     args_save_path = args.save_dir / args.experiment_name / args.experiment_version / "args.json"
     args_save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -321,6 +324,7 @@ def main():
         check_val_every_n_epoch=args.check_val_every_n_epoch,
         enable_progress_bar=args.enable_progress_bar,
         track_grad_norm=args.track_grad_norm,
+        gradient_clip_val=10,
     )
 
     logger.info("Start fitting.")
