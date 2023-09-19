@@ -324,7 +324,6 @@ def main():
         check_val_every_n_epoch=args.check_val_every_n_epoch,
         enable_progress_bar=args.enable_progress_bar,
         track_grad_norm=args.track_grad_norm,
-        gradient_clip_val=10,
     )
 
     logger.info("Start fitting.")
