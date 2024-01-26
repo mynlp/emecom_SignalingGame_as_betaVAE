@@ -1,25 +1,28 @@
 from logzero import logger
-from pandas import DataFrame
-from typing import Any
+from typing import Any, Literal
 from collections import defaultdict
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 
 from ..metrics import DumpLanguage
 from .common_argparser import CommonArgumentParser
 
 
 class ArgumentParser(CommonArgumentParser):
-    pass
+    compare: tuple[str] = ("vocab_size",)
+    window_size: int = 4
+    xscale: Literal["linear", "log"] = "linear"
+    beam_size: int = 8
 
 
 def main():
     args = ArgumentParser().parse_args()
 
     config_to_experiment_args: dict[tuple[Any, ...], dict[str, Any]] = {}
-    config_to_language: defaultdict[tuple[str, ...], DataFrame] = defaultdict(DataFrame)
+    config_to_lengths: defaultdict[tuple[str, ...], list[list[int]]] = defaultdict(list)
     config_to_random_seeds: defaultdict[tuple[Any, ...], set[int]] = defaultdict(set)
 
     for path in args.experiment_dir.iterdir():
@@ -49,45 +52,54 @@ def main():
         ), f"Duplicate random seed {random_seed} in config {config}."
         config_to_random_seeds[config].add(random_seed)
         # Concat metrics dataframe.
-        config_to_language[config] = pd.concat(
-            [
-                config_to_language[config],
-                pd.read_json(DumpLanguage.make_common_save_file_path(save_dir=path, dataloader_idx=0)),
-            ],
-            axis=0,
-            join="outer",
+        config_to_lengths[config].extend(
+            pd.read_json(
+                DumpLanguage.make_common_save_file_path(
+                    save_dir=path,
+                    dataloader_idx=0,
+                ),
+                lines=True,
+            )[
+                DumpLanguage.make_common_json_key_name(
+                    key_type="message_length",
+                    beam_size=args.beam_size,
+                )
+            ]
+            .dropna(how="any")
+            .tolist()
         )
 
-    config_to_length_avg: dict[tuple[str, ...], DataFrame] = {}
-    config_to_length_sem: dict[tuple[str, ...], DataFrame] = {}
+    config_to_length_avg: dict[tuple[str, ...], npt.NDArray[np.float_]] = {}
+    config_to_length_sem: dict[tuple[str, ...], npt.NDArray[np.float_]] = {}
 
-    for config, df in config_to_language.items():
-        grouped = df.groupby(DumpLanguage.make_common_json_key_name("meaning"), sort=False, as_index=False)
-        config_to_length_avg[config] = grouped.mean()
-        config_to_length_sem[config] = grouped.sem(ddof=1)
+    for config, lengths in config_to_lengths.items():
+        lengths_array = np.array(lengths)
+        config_to_length_avg[config] = lengths_array.mean(axis=0)
+        config_to_length_sem[config] = lengths_array.std(axis=0, ddof=1) / lengths_array.shape[0]
 
     logger.info("Save figures.")
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    for config in config_to_language.keys():
-        avg = config_to_length_avg[config][DumpLanguage.make_common_json_key_name("message_length")].dropna(how="any")
-        sem = config_to_length_sem[config][DumpLanguage.make_common_json_key_name("message_length")].dropna(how="any")
+    for config in config_to_lengths.keys():
+        avg = config_to_length_avg[config]
+        sem = config_to_length_sem[config]
         ax.plot(
-            np.arange(len(avg)),
-            avg.to_numpy(),
+            np.arange(avg.shape[0] - args.window_size + 1) + 1,
+            np.convolve(avg, np.ones(args.window_size) / args.window_size, mode="valid"),
             label=f"{args.compare}={config}",
         )
-        if len(avg) == len(sem):
-            ax.fill_between(
-                np.arange(len(avg)),
-                avg.to_numpy() + sem.to_numpy(),
-                avg.to_numpy() - sem.to_numpy(),
-                alpha=0.1,
-                color=ax.get_lines()[-1].get_color(),
-            )
+        # ax.fill_between(
+        #     np.arange(avg.shape[0]) + 1,
+        #     np.convolve(avg + sem, np.ones(args.window_size) / args.window_size, mode="same"),
+        #     np.convolve(avg - sem, np.ones(args.window_size) / args.window_size, mode="same"),
+        #     alpha=0.3,
+        #     color=ax.get_lines()[-1].get_color(),
+        # )
     ax.legend()
-    fig.savefig((args.output_dir / f"message_length.png").as_posix())
+    # ax.set_ylim(0, 30)
+    ax.set_xscale(args.xscale)
+    fig.savefig((args.output_dir / "message_length.png").as_posix())
 
 
 if __name__ == "__main__":

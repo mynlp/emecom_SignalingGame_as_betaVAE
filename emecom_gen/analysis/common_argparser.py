@@ -6,8 +6,7 @@ from logzero import logger
 class CommonArgumentParser(Tap):
     experiment_dir: Path
     output_dir: Path = Path("./analysis_dir")
-    compare: tuple[str, ...] = ("beta",)
-    ignore: tuple[str, ...] = ("reproducibility", "experiment_version")
+    ignore: tuple[str, ...] = ("reproducibility", "experiment_version", "experiment_name")
     check_args_consistency: bool = True
 
     def process_args(self) -> None:
@@ -22,6 +21,6 @@ class CommonArgumentParser(Tap):
         self.output_dir = self.output_dir / self.experiment_dir.name
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info("Save arguments.")
-        args_save_path = self.output_dir / "args.json"
-        self.save(args_save_path.as_posix())
+        # logger.info("Save arguments.")
+        # args_save_path = self.output_dir / "args.json"
+        # self.save(args_save_path.as_posix())
