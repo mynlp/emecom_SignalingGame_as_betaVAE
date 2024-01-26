@@ -36,8 +36,8 @@ class ArgumentParser(CommonArgumentParser):
     n_attributes: int = 2  # Number of attributes.
     n_values: int = 16  # Number of values.
     experiment_name: str = "attribute-value-signaling-game"  # Name of sub-directory of `save_dir`.
-    compute_topsim: bool = True
-    compute_language_similarity: bool = True
+    compute_topsim: bool = False
+    compute_language_similarity: bool = False
     compute_harris_based_metrics: bool = False
 
     def process_args(self) -> None:
