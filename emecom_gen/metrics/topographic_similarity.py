@@ -70,9 +70,15 @@ class TopographicSimilarity(Callback):
         message_lengths: Optional[Sequence[int]] = None,
         meaning_distance_fn: Literal["hamming", "edit", "cosine", "euclidean"]
         | Callable[[Any, Any], float | int] = "hamming",
-        message_distance_fn: Literal["hamming", "edit", "jaccard", "dice", "simpson"]
+        message_distance_fn: Literal["hamming", "edit", "jaccard", "dice", "simpson", "tfidf"]
         | Callable[[Any, Any], float | int] = "edit",
+        num_samples: int | None = None,
     ):
+        if num_samples is not None:
+            permutation_indices = np.random.permutation(min(len(messages), num_samples))
+            meanings = [meanings[i] for i in permutation_indices]
+            messages = [messages[i] for i in permutation_indices]
+
         match meaning_distance_fn:
             case "edit":
                 meaning_distances = pdist(meanings, metric=editdistance.eval)
@@ -83,9 +89,10 @@ class TopographicSimilarity(Callback):
             case unknown:
                 raise ValueError(f"Unkown meaning distance fn `{unknown}`.")
 
+        message_distances: list[float]
         match message_distance_fn:
             # `scipy.spatial.distance.pdist` does not support the variable-length case.
-            case metric if metric in ("edit", "jaccard", "dice", "simpson"):
+            case "edit" | "jaccard" | "dice" | "simpson" as metric:
                 match metric:
                     case "edit":
                         fn = editdistance.eval
@@ -103,12 +110,33 @@ class TopographicSimilarity(Callback):
                     for i in range(len(messages))
                     for j in range(i + 1, len(messages))
                 ]
-            case metric if metric in ("hamming",):
-                message_distances = pdist(messages, metric=metric)
-            case fn if callable(fn):
-                message_distances = pdist(messages, metric=fn)
-            case _:
-                pass
+            case "tfidf":
+                from sklearn.feature_extraction.text import TfidfVectorizer
+
+                print(
+                    [
+                        " ".join(
+                            bin(x)[2:].replace("0", "a").replace("1", "b")
+                            for x in messages[i][: None if message_lengths is None else message_lengths[i]]
+                        )
+                        for i in range(len(messages))
+                    ]
+                )
+                tfidf_matrix = TfidfVectorizer().fit_transform(
+                    [
+                        " ".join(
+                            bin(x)[2:].replace("0", "a").replace("1", "b")
+                            for x in messages[i][: None if message_lengths is None else message_lengths[i]]
+                        )
+                        for i in range(len(messages))
+                    ]
+                )
+                message_distances = pdist(tfidf_matrix.toarray(), metric="cosine").tolist()
+            case "hamming":
+                message_distances = pdist(messages, metric="hamming").tolist()
+            case fn:
+                assert callable(fn)
+                message_distances = pdist(messages, metric=fn).tolist()
 
         topsim = float(spearmanr(meaning_distances, message_distances, nan_policy="propagate").statistic)
 

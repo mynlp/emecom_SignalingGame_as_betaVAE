@@ -38,9 +38,18 @@ class HarrisScheme(Generic[T]):
         threshold: float = 0,
         random_seed: int = 0,
         verbose: bool = False,
+        eos_id: T | None = None,
+        bos_id: T | None = None,
+        reverse: bool = False,
     ):
         self.verbose = verbose
         self.__data = [tuple(x) for x in language_data]
+        if eos_id is not None:
+            self.__data = [x[: x.index(eos_id)] if eos_id in x else x for x in self.__data]
+        if bos_id is not None:
+            self.__data = [(bos_id,) + x for x in self.__data]
+        if reverse:
+            self.__data = [tuple(reversed(x)) for x in self.__data]
         self.threshold = threshold
         self.random_seed = random_seed
         self.__reset_on_init()
@@ -243,6 +252,10 @@ class HarrisScheme(Generic[T]):
     @property
     def mean_n_boundaries(self) -> float:
         return sum(self.n_boundaries) / len(self.n_boundaries)
+
+    @property
+    def mean_density_boundaries(self) -> float:
+        return sum(n / len(d) for n, d in zip(self.n_boundaries, self.data)) / len(self.data)
 
     @property
     def vocab_size(self) -> int:
